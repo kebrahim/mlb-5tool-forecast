@@ -1,0 +1,43 @@
+
+export const MLB_TEAMS = [
+  { id: '110', name: 'Baltimore Orioles', abbr: 'BAL' },
+  { id: '111', name: 'Boston Red Sox', abbr: 'BOS' },
+  { id: '147', name: 'New York Yankees', abbr: 'NYY' },
+  { id: '139', name: 'Tampa Bay Rays', abbr: 'TB' },
+  { id: '141', name: 'Toronto Blue Jays', abbr: 'TOR' },
+  { id: '145', name: 'Chicago White Sox', abbr: 'CWS' },
+  { id: '114', name: 'Cleveland Guardians', abbr: 'CLE' },
+  { id: '116', name: 'Detroit Tigers', abbr: 'DET' },
+  { id: '118', name: 'Kansas City Royals', abbr: 'KC' },
+  { id: '142', name: 'Minnesota Twins', abbr: 'MIN' },
+  { id: '117', name: 'Houston Astros', abbr: 'HOU' },
+  { id: '108', name: 'Los Angeles Angels', abbr: 'LAA' },
+  { id: '133', name: 'Oakland Athletics', abbr: 'OAK' },
+  { id: '136', name: 'Seattle Mariners', abbr: 'SEA' },
+  { id: '140', name: 'Texas Rangers', abbr: 'TEX' },
+  { id: '144', name: 'Atlanta Braves', abbr: 'ATL' },
+  { id: '146', name: 'Miami Marlins', abbr: 'MIA' },
+  { id: '121', name: 'New York Mets', abbr: 'NYM' },
+  { id: '143', name: 'Philadelphia Phillies', abbr: 'PHI' },
+  { id: '120', name: 'Washington Nationals', abbr: 'WSH' },
+  { id: '112', name: 'Chicago Cubs', abbr: 'CHC' },
+  { id: '113', name: 'Cincinnati Reds', abbr: 'CIN' },
+  { id: '158', name: 'Milwaukee Brewers', abbr: 'MIL' },
+  { id: '134', name: 'Pittsburgh Pirates', abbr: 'PIT' },
+  { id: '138', name: 'St. Louis Cardinals', abbr: 'STL' },
+  { id: '109', name: 'Arizona Diamondbacks', abbr: 'ARI' },
+  { id: '115', name: 'Colorado Rockies', abbr: 'COL' },
+  { id: '119', name: 'Los Angeles Dodgers', abbr: 'LAD' },
+  { id: '135', name: 'San Diego Padres', abbr: 'SD' },
+  { id: '137', name: 'San Francisco Giants', abbr: 'SF' },
+];
+
+// Projected Win Totals (Yahoo Data)
+export const DEFAULT_LINES: Record<string, number> = {
+  '110': 90.5, '111': 80.5, '147': 93.5, '139': 84.5, '141': 86.5,
+  '145': 61.5, '114': 82.5, '116': 81.5, '118': 74.5, '142': 86.5,
+  '117': 92.5, '108': 72.5, '133': 66.5, '136': 87.5, '140': 88.5,
+  '144': 101.5, '146': 78.5, '121': 81.5, '143': 89.5, '120': 66.5,
+  '112': 84.5, '113': 82.5, '158': 77.5, '134': 75.5, '138': 85.5,
+  '109': 83.5, '115': 59.5, '119': 103.5, '135': 83.5, '137': 80.5,
+};

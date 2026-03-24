@@ -1,0 +1,82 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      let adminUids = ["grO2toc43eRPikIlRbeBuBhZ0Mj1", "khOAnVBrSaeSVkZN24HLfjRFJwN2"];
+      let adminEmails = ["kebrahim@gmail.com", "elenaebrahim14@gmail.com"];
+      return isAuthenticated() && 
+        (request.auth.uid in adminUids || 
+         (request.auth.token.keys().contains("email") && 
+          request.auth.token.email in adminEmails && 
+          request.auth.token.email_verified == true) ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+    }
+
+    function isContestLocked(contestId) {
+      return request.time >= timestamp(get(/databases/$(database)/documents/contests/$(contestId)).data.start_time);
+    }
+
+    // User Profiles
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId) || isAdmin();
+    }
+
+    // Team Lines
+    match /team_lines/{teamId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Global Settings
+    match /settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Contests
+    match /contests/{contestId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+      
+      allow update: if (
+        isAuthenticated() && 
+        resource.data.is_draft == true && 
+        resource.data.draft_status == "in_progress" &&
+        resource.data.draft_order.size() > 0 &&
+        request.auth.uid == (
+          (math.floor(resource.data.current_turn_index / resource.data.draft_order.size()) % 2 == 1)
+            ? resource.data.draft_order[resource.data.draft_order.size() - 1 - (resource.data.current_turn_index % resource.data.draft_order.size())]
+            : resource.data.draft_order[resource.data.current_turn_index % resource.data.draft_order.size()]
+        ) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(["current_turn_index", "draft_status"])
+      );
+
+      // Entries
+      match /entries/{entryUserId} {
+        allow read: if (isAuthenticated() && (request.auth.uid == entryUserId || isAdmin())) || 
+                     isContestLocked(contestId) || 
+                     get(/databases/$(database)/documents/contests/$(contestId)).data.is_draft == true;
+        allow write: if isAdmin();
+        allow create, update: if (
+          isAuthenticated() && request.auth.uid == entryUserId && 
+          (
+            get(/databases/$(database)/documents/contests/$(contestId)).data.is_draft == true ||
+            !exists(/databases/$(database)/documents/contests/$(contestId)) || 
+            request.time < timestamp(get(/databases/$(database)/documents/contests/$(contestId)).data.start_time)
+          )
+        );
+      }
+    }
+  }
+}
