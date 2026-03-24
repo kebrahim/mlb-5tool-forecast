@@ -40,8 +40,8 @@
       "properties": {
         "theme_name": { "type": "string" },
         "metric_key": { "type": "string" },
-        "start_time": { "type": "string", "format": "date-time" },
-        "end_time": { "type": "string", "format": "date-time" },
+        "start_time": { "type": "string", "format": "date-time", "description": "Stored as Firestore Timestamp" },
+        "end_time": { "type": "string", "format": "date-time", "description": "Stored as Firestore Timestamp" },
         "is_active": { "type": "boolean" },
         "is_draft": { "type": "boolean" },
         "selection_limit": { "type": "number" },

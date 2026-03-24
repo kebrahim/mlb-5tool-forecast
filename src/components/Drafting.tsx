@@ -38,6 +38,12 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   throw new Error(JSON.stringify(errInfo));
 }
 
+const parseDate = (date: any): Date => {
+  if (!date) return new Date();
+  if (date.toDate && typeof date.toDate === 'function') return date.toDate();
+  return new Date(date);
+};
+
 interface DraftingProps {
   contest: Contest;
   contests: Contest[];
@@ -463,7 +469,7 @@ function SelectionRoom({
                       min="5"
                       max="40"
                       step="1"
-                      value={selection?.chips || 5}
+                      value={selection?.chips || 20}
                       onChange={(e) => {
                         onChipChange(team.id, parseInt(e.target.value));
                       }}
@@ -497,8 +503,8 @@ function ContestSelector({
 
   const getStatus = (c: Contest) => {
     const now = new Date();
-    const start = new Date(c.start_time);
-    const end = new Date(c.end_time);
+    const start = parseDate(c.start_time);
+    const end = parseDate(c.end_time);
 
     if (c.is_draft) {
       if (c.draft_status === 'completed') {
@@ -554,7 +560,7 @@ function ContestSelector({
                 <div className="px-4 py-2 text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-800/50 mb-2">
                   Switch Contest
                 </div>
-                {contests.sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime()).map(c => {
+                {contests.sort((a, b) => parseDate(b.start_time).getTime() - parseDate(a.start_time).getTime()).map(c => {
                   const status = getStatus(c);
                   const isActive = c.id === currentContest.id;
                   return (
@@ -702,7 +708,7 @@ export default function Drafting({ contest, contests, onContestChange }: Draftin
       }
     };
     const checkLock = () => {
-      const startTime = new Date(contest.start_time).getTime();
+      const startTime = parseDate(contest.start_time).getTime();
       const endTime = new Date(contest.end_time).getTime();
       const now = Date.now();
       
@@ -804,19 +810,23 @@ export default function Drafting({ contest, contests, onContestChange }: Draftin
         toast.error(`Maximum ${contest.selection_limit} teams allowed`);
         return prev;
       }
-      return [...prev, { team_id: teamId, chips: contest.use_chips ? 5 : 1, side }];
+      return [...prev, { team_id: teamId, chips: contest.use_chips ? 20 : 1, side }];
     });
   };
 
   const saveEntry = async () => {
     if (!auth.currentUser || !canSave) return;
     setSaving(true);
+    const path = `contests/${contest.id}/entries/${auth.currentUser.uid}`;
     try {
       const entryRef = doc(db, 'contests', contest.id, 'entries', auth.currentUser.uid);
       await setDoc(entryRef, { selections, score: 0, is_valid: true, last_updated: new Date().toISOString() });
       setSavedSelections(selections);
       toast.success('Picks saved successfully!');
-    } catch (error: any) { toast.error(error.message); } finally { setSaving(false); }
+    } catch (error: any) { 
+      handleFirestoreError(error, OperationType.WRITE, path);
+      toast.error(error.message); 
+    } finally { setSaving(false); }
   };
 
   const startDraft = async () => {

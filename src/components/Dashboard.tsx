@@ -40,6 +40,12 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   throw new Error(JSON.stringify(errInfo));
 }
 
+const parseDate = (date: any): Date => {
+  if (!date) return new Date();
+  if (date.toDate && typeof date.toDate === 'function') return date.toDate();
+  return new Date(date);
+};
+
 export default function Dashboard() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
@@ -157,7 +163,7 @@ export default function Dashboard() {
     if (!activeContest) return;
     
     const isAdminUser = user?.role === 'admin' || currentUserEmail?.toLowerCase() === 'kebrahim@gmail.com';
-    const contestLocked = new Date(activeContest.start_time).getTime() < Date.now();
+    const contestLocked = parseDate(activeContest.start_time).getTime() < Date.now();
 
     if (!contestLocked && !isAdminUser && rival.uid !== auth.currentUser?.uid) {
       toast.error("Rival picks are hidden until the contest starts!", {
@@ -186,7 +192,7 @@ export default function Dashboard() {
     }
   };
 
-  const isLocked = activeContest ? new Date(activeContest.start_time).getTime() < Date.now() : false;
+  const isLocked = activeContest ? parseDate(activeContest.start_time).getTime() < Date.now() : false;
 
   const formatMetric = (key: string) => {
     if (key.toLowerCase() === 'hrs') return 'Home Runs';
@@ -212,8 +218,8 @@ export default function Dashboard() {
 
   const getContestStatus = (c: Contest) => {
     const now = new Date();
-    const start = new Date(c.start_time);
-    const end = new Date(c.end_time);
+    const start = parseDate(c.start_time);
+    const end = parseDate(c.end_time);
 
     if (c.is_draft) {
       if (c.draft_status === 'completed') {
@@ -555,11 +561,11 @@ export default function Dashboard() {
                                   <div className="flex flex-col gap-1 mb-3 md:mb-4">
                                     <div className="flex items-center gap-2 text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest">
                                       <Calendar size={10} className="text-emerald-500 md:w-3 md:h-3" />
-                                      <span>Starts: {new Date(contest.start_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                      <span>Starts: {parseDate(contest.start_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                                     </div>
                                     <div className="flex items-center gap-2 text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest">
                                       <Calendar size={10} className="text-rose-500 md:w-3 md:h-3" />
-                                      <span>Ends: {new Date(contest.end_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                      <span>Ends: {parseDate(contest.end_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                                     </div>
                                   </div>
 
@@ -616,11 +622,11 @@ export default function Dashboard() {
                                   </div>
                                   <div>
                                     <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Starts</div>
-                                    <div className="text-xs font-bold text-white">{new Date(activeContest.start_time).toLocaleDateString()}</div>
+                                    <div className="text-xs font-bold text-white">{parseDate(activeContest.start_time).toLocaleDateString()}</div>
                                   </div>
                                   <div>
                                     <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Ends</div>
-                                    <div className="text-xs font-bold text-white">{new Date(activeContest.end_time).toLocaleDateString()}</div>
+                                    <div className="text-xs font-bold text-white">{parseDate(activeContest.end_time).toLocaleDateString()}</div>
                                   </div>
                                 </div>
                               </div>

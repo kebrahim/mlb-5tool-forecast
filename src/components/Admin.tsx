@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db, auth } from '../firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { doc, setDoc, collection, writeBatch, onSnapshot, getDocs, deleteDoc, query } from 'firebase/firestore';
+import { doc, setDoc, collection, writeBatch, onSnapshot, getDocs, deleteDoc, query, Timestamp } from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
 import { Database, ShieldCheck, AlertCircle, Clock, RefreshCw, Power, ListOrdered, Play, Trash2, UserMinus, Mail } from 'lucide-react';
 import { MLB_TEAMS, DEFAULT_LINES } from '../mlbData';
@@ -101,8 +101,8 @@ export default function Admin() {
     try {
       await setDoc(doc(db, 'contests', contestId), {
         theme_name: editTitle,
-        start_time: editStartTime,
-        end_time: editEndTime,
+        start_time: Timestamp.fromDate(new Date(editStartTime)),
+        end_time: Timestamp.fromDate(new Date(editEndTime)),
         description: editDescription,
         metric_key: editMetric
       }, { merge: true });
@@ -203,8 +203,8 @@ export default function Admin() {
         theme_name: 'Season 2026: Big Bet',
         description: 'Pick 5 teams to go OVER or UNDER their projected win totals. Use 100 confidence chips to weigh your picks.',
         metric_key: 'wins',
-        start_time: '2026-03-25T20:00:00-04:00',
-        end_time: '2026-10-01T00:00:00Z',
+        start_time: Timestamp.fromDate(new Date('2026-03-25T20:00:00-04:00')),
+        end_time: Timestamp.fromDate(new Date('2026-10-01T00:00:00Z')),
         is_active: true,
         selection_limit: 5,
         use_chips: true,
@@ -231,8 +231,8 @@ export default function Admin() {
         batch.set(sprintRef, {
           theme_name: sprint.name,
           metric_key: sprint.metric,
-          start_time: sprint.start,
-          end_time: sprint.end,
+          start_time: Timestamp.fromDate(new Date(sprint.start)),
+          end_time: Timestamp.fromDate(new Date(sprint.end)),
           is_active: true,
           selection_limit: sprint.limit,
           use_chips: sprint.chips,
@@ -589,8 +589,8 @@ export default function Admin() {
                     <button
                       onClick={() => {
                         setEditingContestId(c.id);
-                        setEditStartTime(c.start_time);
-                        setEditEndTime(c.end_time);
+                        setEditStartTime(c.start_time instanceof Timestamp ? c.start_time.toDate().toISOString() : c.start_time);
+                        setEditEndTime(c.end_time instanceof Timestamp ? c.end_time.toDate().toISOString() : c.end_time);
                         setEditDescription(c.description || '');
                         setEditTitle(c.theme_name);
                         setEditMetric(c.metric_key);
