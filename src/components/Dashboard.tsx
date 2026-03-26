@@ -118,12 +118,7 @@ export default function Dashboard() {
         if (prev) {
           const current = list.find(c => c.id === prev.id);
           if (current && current.is_active) {
-            // Check if any relevant field has changed
-            const hasChanged = JSON.stringify(current) !== JSON.stringify(prev);
-            if (hasChanged) {
-              return current;
-            }
-            return prev;
+            return current;
           }
         }
         const defaultContest = list.find(c => c.id === 'april_2026' && c.is_active) || list.find(c => c.is_active) || null;

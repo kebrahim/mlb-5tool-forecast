@@ -709,7 +709,7 @@ export default function Drafting({ contest, contests, onContestChange }: Draftin
     };
     const checkLock = () => {
       const startTime = parseDate(contest.start_time).getTime();
-      const endTime = new Date(contest.end_time).getTime();
+      const endTime = parseDate(contest.end_time).getTime();
       const now = Date.now();
       
       if (now > endTime) {
@@ -738,7 +738,7 @@ export default function Drafting({ contest, contests, onContestChange }: Draftin
       clearInterval(interval); 
       unsubEntries();
     };
-  }, [contest.id, contest.start_time]);
+  }, [contest.id, contest.start_time, contest.end_time]);
 
   const handleChipChange = (teamId: string, chips: number) => {
     if (isLocked || !contest.use_chips) return;
