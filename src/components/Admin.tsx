@@ -116,12 +116,31 @@ export default function Admin() {
   const deleteUser = async (uid: string) => {
     setLoading(true);
     try {
-      await deleteDoc(doc(db, 'users', uid));
-      toast.success("User deleted successfully.");
+      const batch = writeBatch(db);
+      
+      // 1. Delete user document
+      batch.delete(doc(db, 'users', uid));
+      
+      // 2. Delete user's picks in all contests and remove from draft orders
+      for (const contest of contests) {
+        // Delete entry
+        batch.delete(doc(db, 'contests', contest.id, 'entries', uid));
+        
+        // Remove from draft order if present
+        if (contest.draft_order && contest.draft_order.includes(uid)) {
+          const newOrder = contest.draft_order.filter(id => id !== uid);
+          batch.update(doc(db, 'contests', contest.id), {
+            draft_order: newOrder
+          });
+        }
+      }
+      
+      await batch.commit();
+      toast.success("User and all their picks deleted successfully.");
       setUserToDelete(null);
     } catch (error) {
       console.error("Error deleting user:", error);
-      toast.error("Failed to delete user.");
+      toast.error("Failed to delete user and their picks.");
     } finally {
       setLoading(false);
     }
