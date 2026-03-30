@@ -36,6 +36,7 @@ export interface Contest {
   draft_order?: string[];
   current_turn_index?: number;
   draft_status?: 'pending' | 'in_progress' | 'completed';
+  starting_stats?: Record<string, number>;
 }
 
 export interface Selection {

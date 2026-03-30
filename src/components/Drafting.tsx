@@ -80,6 +80,7 @@ function SnakeDraftRoom({
 
   const formatMetric = (key: string) => {
     if (key.toLowerCase() === 'hrs') return 'Home Runs';
+    if (key.toLowerCase() === 'wins') return 'CP';
     return key.toUpperCase();
   };
 
@@ -256,7 +257,7 @@ function SnakeDraftRoom({
                       {contest.metric_key === 'wins' ? 'O/U Line' : `${formatMetric(contest.metric_key)} Sprint`}
                     </span>
                     <span className="text-lg font-black text-amber-500 leading-none">
-                      {contest.metric_key === 'wins' ? team.ou_line : team.stats[contest.metric_key as keyof typeof team.stats] || 0}
+                      {contest.metric_key === 'wins' ? team.ou_line : (parseDate(contest.start_time) <= new Date() ? Math.max(0, (team.stats[contest.metric_key as keyof typeof team.stats] || 0) - (contest.starting_stats?.[team.id] || 0)) : 0)}
                     </span>
                   </div>
                 </div>
@@ -326,6 +327,7 @@ function SelectionRoom({
 }) {
   const formatMetric = (key: string) => {
     if (key.toLowerCase() === 'hrs') return 'Home Runs';
+    if (key.toLowerCase() === 'wins') return 'CP';
     return key.toUpperCase();
   };
 
@@ -415,7 +417,7 @@ function SelectionRoom({
                       {contest.metric_key === 'wins' ? 'O/U Line' : `${formatMetric(contest.metric_key)}`}
                     </span>
                     <span className="text-base md:text-lg font-black text-amber-500 leading-none">
-                      {contest.metric_key === 'wins' ? team.ou_line : team.stats[contest.metric_key as keyof typeof team.stats] || 0}
+                      {contest.metric_key === 'wins' ? team.ou_line : (parseDate(contest.start_time) <= new Date() ? Math.max(0, (team.stats[contest.metric_key as keyof typeof team.stats] || 0) - (contest.starting_stats?.[team.id] || 0)) : 0)}
                     </span>
                   </div>
                 </div>

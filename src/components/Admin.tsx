@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db, auth } from '../firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { doc, setDoc, collection, writeBatch, onSnapshot, getDocs, deleteDoc, query, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, collection, writeBatch, onSnapshot, getDocs, deleteDoc, query, Timestamp } from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
 import { Database, ShieldCheck, AlertCircle, Clock, RefreshCw, Power, ListOrdered, Play, Trash2, UserMinus, Mail } from 'lucide-react';
 import { MLB_TEAMS, DEFAULT_LINES } from '../mlbData';
@@ -9,7 +9,8 @@ import { UserProfile, Contest } from '../types';
 
 export default function Admin() {
   const [loading, setLoading] = useState(false);
-  const [syncEnabled, setSyncEnabled] = useState<boolean | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncEnabled, setSyncEnabled] = useState(false);
   const [contests, setContests] = useState<Contest[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [editingContestId, setEditingContestId] = useState<string | null>(null);
@@ -25,16 +26,6 @@ export default function Admin() {
   const [editLineValue, setEditLineValue] = useState<string>('');
 
   useEffect(() => {
-    const unsubSync = onSnapshot(doc(db, 'settings', 'mlb_sync'), (snap) => {
-      if (snap.exists()) {
-        setSyncEnabled(snap.data().enabled);
-      } else {
-        setSyncEnabled(false);
-      }
-    }, (error) => {
-      console.error("Settings sync error:", error);
-    });
-
     const unsubContests = onSnapshot(collection(db, 'contests'), (snap) => {
       setContests(snap.docs.map(d => ({ id: d.id, ...d.data() } as Contest)));
     }, (error) => {
@@ -53,13 +44,62 @@ export default function Admin() {
       console.error("Admin team lines sync error:", error);
     });
 
+    const unsubSyncSettings = onSnapshot(doc(db, 'settings', 'mlb_sync'), (snap) => {
+      if (snap.exists()) {
+        setSyncEnabled(snap.data().enabled || false);
+      }
+    });
+
     return () => {
-      unsubSync();
       unsubContests();
       unsubUsers();
       unsubTeamLines();
+      unsubSyncSettings();
     };
   }, []);
+
+  // Auto-snapshot logic for contests that have started but have no starting_stats
+  useEffect(() => {
+    const checkAutoSnapshots = async () => {
+      const now = new Date();
+      const contestsToSnapshot = contests.filter(c => 
+        c.metric_key !== 'wins' && 
+        !c.starting_stats && 
+        c.start_time &&
+        (typeof c.start_time === 'string' ? new Date(c.start_time) : (c.start_time as any).toDate()).getTime() <= now.getTime() &&
+        (typeof c.end_time === 'string' ? new Date(c.end_time) : (c.end_time as any).toDate()).getTime() > now.getTime()
+      );
+
+      if (contestsToSnapshot.length > 0 && teamLines.length > 0) {
+        console.log("Found contests needing auto-snapshot:", contestsToSnapshot.map(c => c.theme_name));
+        const batch = writeBatch(db);
+        
+        contestsToSnapshot.forEach(contest => {
+          const statsMap: Record<string, number> = {};
+          teamLines.forEach(team => {
+            statsMap[team.id] = team.stats[contest.metric_key as keyof typeof team.stats] || 0;
+          });
+          
+          batch.update(doc(db, 'contests', contest.id), {
+            starting_stats: statsMap,
+            auto_snapshotted: true,
+            last_updated: new Date().toISOString()
+          });
+        });
+
+        try {
+          await batch.commit();
+          toast.success(`Automatically captured starting stats for ${contestsToSnapshot.length} contest(s)`);
+        } catch (error) {
+          console.error("Auto-snapshot failed:", error);
+        }
+      }
+    };
+
+    if (contests.length > 0 && teamLines.length > 0) {
+      checkAutoSnapshots();
+    }
+  }, [contests, teamLines]);
 
   const generateDraftOrder = async (contestId: string) => {
     const contest = contests.find(c => c.id === contestId);
@@ -92,6 +132,25 @@ export default function Admin() {
         current_turn_index: 0
       }, { merge: true });
       toast.success('Draft started!');
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  const snapshotStartingStats = async (contestId: string) => {
+    const contest = contests.find(c => c.id === contestId);
+    if (!contest) return;
+
+    const statsMap: Record<string, number> = {};
+    teamLines.forEach(team => {
+      statsMap[team.id] = team.stats[contest.metric_key] || 0;
+    });
+
+    try {
+      await updateDoc(doc(db, 'contests', contestId), {
+        starting_stats: statsMap
+      });
+      toast.success(`Starting stats snapshotted for ${contest.theme_name}!`);
     } catch (error: any) {
       toast.error(error.message);
     }
@@ -164,16 +223,92 @@ export default function Admin() {
     }
   };
 
-  const toggleSync = async () => {
+  const handleToggleSync = async () => {
     try {
-      await setDoc(doc(db, 'settings', 'mlb_sync'), {
-        enabled: !syncEnabled,
-        last_updated: new Date().toISOString(),
-        updated_by: auth.currentUser?.uid || 'unknown'
-      }, { merge: true });
+      const syncRef = doc(db, 'settings', 'mlb_sync');
+      await updateDoc(syncRef, {
+        enabled: !syncEnabled
+      });
       toast.success(`MLB Sync ${!syncEnabled ? 'Enabled' : 'Disabled'}`);
+    } catch (error) {
+      console.error('Error toggling sync:', error);
+      toast.error('Failed to toggle sync');
+    }
+  };
+
+  const handleManualSync = async () => {
+    setSyncing(true);
+    try {
+      toast.loading("Fetching MLB Standings...", { id: 'sync-status' });
+      
+      // 1. Fetch Standings
+      const standingsRes = await fetch("https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=2026&standingsTypes=regularSeason");
+      const standingsData = await standingsRes.json();
+      
+      if (!standingsData.records || standingsData.records.length === 0) {
+        throw new Error("No standings records found in MLB API for 2026.");
+      }
+
+      const teamStatsMap: Record<string, { wins: number, losses: number }> = {};
+      standingsData.records.forEach((record: any) => {
+        record.teamRecords?.forEach((tr: any) => {
+          teamStatsMap[tr.team.id.toString()] = {
+            wins: tr.wins,
+            losses: tr.losses
+          };
+        });
+      });
+
+      toast.loading("Updating team stats...", { id: 'sync-status' });
+      
+      const batch = writeBatch(db);
+      let updatedCount = 0;
+
+      // Process teams in chunks to avoid overwhelming the browser/API
+      for (const team of MLB_TEAMS) {
+        const mlbStats = teamStatsMap[team.id];
+        if (mlbStats) {
+          try {
+            // Fetch HRs and Ks for each team
+            const [hitRes, pitchRes] = await Promise.all([
+              fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=season&group=hitting&season=2026`),
+              fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=season&group=pitching&season=2026`)
+            ]);
+            
+            const hitData = await hitRes.json();
+            const pitchData = await pitchRes.json();
+            
+            const hrs = hitData.stats?.[0]?.splits?.[0]?.stat?.homeRuns || 0;
+            const ks = pitchData.stats?.[0]?.splits?.[0]?.stat?.strikeOuts || 0;
+
+            batch.update(doc(db, 'team_lines', team.id), {
+              "stats.wins": mlbStats.wins,
+              "stats.losses": mlbStats.losses,
+              "stats.hrs": hrs,
+              "stats.ks": ks,
+              last_sync: new Date().toISOString()
+            });
+            updatedCount++;
+          } catch (e) {
+            console.warn(`Failed to fetch extra stats for ${team.name}`, e);
+            // Still update wins/losses even if HRs/Ks fail
+            batch.update(doc(db, 'team_lines', team.id), {
+              "stats.wins": mlbStats.wins,
+              "stats.losses": mlbStats.losses,
+              last_sync: new Date().toISOString()
+            });
+            updatedCount++;
+          }
+        }
+      }
+
+      await batch.commit();
+      toast.success(`Sync successful! ${updatedCount} teams updated.`, { id: 'sync-status' });
     } catch (error: any) {
-      toast.error(error.message);
+      console.error("Manual sync error:", error);
+      toast.error('Sync failed: ' + error.message, { id: 'sync-status' });
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -239,6 +374,17 @@ export default function Admin() {
           metric: 'hrs', 
           start: '2026-04-01T00:00:00-04:00', 
           end: '2026-05-01T00:00:00-04:00', 
+          limit: 3, 
+          chips: false, 
+          draft: true 
+        },
+        { 
+          id: 'may_2026', 
+          name: 'May Sprint: Strikeout King', 
+          description: 'Draft 3 teams. The total strikeouts thrown by your teams in May determines your score.',
+          metric: 'ks', 
+          start: '2026-05-01T00:00:00-04:00', 
+          end: '2026-06-01T00:00:00-04:00', 
           limit: 3, 
           chips: false, 
           draft: true 
@@ -338,7 +484,7 @@ export default function Admin() {
       <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl mb-8 flex items-start gap-3">
         <Clock className="text-blue-500 shrink-0 mt-0.5" size={18} />
         <div className="text-xs text-blue-200 leading-relaxed">
-          <span className="font-bold text-blue-500 uppercase">Note:</span> Automatic MLB stats sync is currently <span className="font-black">{syncEnabled ? 'ENABLED' : 'DISABLED'}</span> via global settings.
+          <span className="font-bold text-blue-500 uppercase">Note:</span> MLB stats sync is currently in <span className="font-black">MANUAL MODE</span>. Click the sync button below to update real-time standings from your browser.
         </div>
       </div>
 
@@ -346,34 +492,40 @@ export default function Admin() {
         <div className="p-4 md:p-6 bg-slate-950 rounded-2xl border border-slate-800">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <RefreshCw className={`${syncEnabled ? 'text-emerald-500 animate-spin-slow' : 'text-slate-500'} md:w-[24px] md:h-[24px]`} size={20} />
+              <RefreshCw className={`${syncing ? 'text-blue-500 animate-spin' : 'text-slate-500'} md:w-[24px] md:h-[24px]`} size={20} />
               <div>
                 <h3 className="font-bold text-sm">MLB Stats Sync</h3>
-                <p className="text-[10px] text-slate-500 uppercase tracking-widest">Background Service</p>
+                <p className="text-[10px] text-slate-500 uppercase tracking-widest">Manual Trigger</p>
               </div>
             </div>
             <button
-              onClick={toggleSync}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                syncEnabled ? 'bg-emerald-600' : 'bg-slate-700'
+              onClick={handleToggleSync}
+              className={`px-3 py-1 rounded-full text-[10px] font-black transition-all border ${
+                syncEnabled 
+                  ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-500' 
+                  : 'bg-slate-800 border-slate-700 text-slate-500'
               }`}
             >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  syncEnabled ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
+              {syncEnabled ? 'ENABLED' : 'DISABLED'}
             </button>
           </div>
           <p className="text-xs text-slate-400 leading-relaxed mb-4">
-            When enabled, the server will fetch real-time MLB standings, home runs, and strikeouts every hour.
+            Trigger a manual sync of real-time MLB standings, home runs, and strikeouts directly from your browser.
           </p>
-          <div className="flex items-center gap-2 text-[10px] font-mono">
-            <span className={`w-2 h-2 rounded-full ${syncEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
-            <span className={syncEnabled ? 'text-emerald-500' : 'text-rose-500'}>
-              STATUS: {syncEnabled ? 'ACTIVE' : 'PAUSED'}
+          <div className="flex items-center gap-2 text-[10px] font-mono mb-4">
+            <span className="w-2 h-2 rounded-full bg-blue-500" />
+            <span className="text-blue-500">
+              MODE: MANUAL (BROWSER-BASED)
             </span>
           </div>
+          <button
+            onClick={handleManualSync}
+            disabled={syncing}
+            className="w-full px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-[10px] font-bold rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-700"
+          >
+            <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
+            {syncing ? 'Syncing...' : 'Sync Now (Manual Test)'}
+          </button>
         </div>
 
         <div className="p-4 md:p-6 bg-slate-950 rounded-2xl border border-slate-800">
@@ -605,20 +757,42 @@ export default function Admin() {
                       </div>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => {
-                        setEditingContestId(c.id);
-                        setEditStartTime(c.start_time instanceof Timestamp ? c.start_time.toDate().toISOString() : c.start_time);
-                        setEditEndTime(c.end_time instanceof Timestamp ? c.end_time.toDate().toISOString() : c.end_time);
-                        setEditDescription(c.description || '');
-                        setEditTitle(c.theme_name);
-                        setEditMetric(c.metric_key);
-                      }}
-                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-[10px] font-bold rounded-lg transition-all flex items-center gap-2"
-                    >
-                      <Clock size={14} />
-                      Edit
-                    </button>
+                      <div className="flex items-center gap-2">
+                        {c.metric_key !== 'wins' && (
+                          <div className="flex flex-col gap-1">
+                            <button
+                              onClick={() => snapshotStartingStats(c.id)}
+                              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-2 border ${
+                                c.starting_stats 
+                                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' 
+                                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                              }`}
+                            >
+                              <RefreshCw size={14} className={c.starting_stats ? '' : 'animate-pulse'} />
+                              {c.starting_stats ? 'Snapshot Taken' : 'Take Start Snapshot'}
+                            </button>
+                            {!c.starting_stats && (
+                              <span className="text-[7px] text-slate-500 uppercase tracking-tighter italic">
+                                * System will auto-snapshot on start
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        <button
+                        onClick={() => {
+                          setEditingContestId(c.id);
+                          setEditStartTime(c.start_time instanceof Timestamp ? c.start_time.toDate().toISOString() : c.start_time);
+                          setEditEndTime(c.end_time instanceof Timestamp ? c.end_time.toDate().toISOString() : c.end_time);
+                          setEditDescription(c.description || '');
+                          setEditTitle(c.theme_name);
+                          setEditMetric(c.metric_key);
+                        }}
+                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-[10px] font-bold rounded-lg transition-all flex items-center gap-2"
+                      >
+                        <Clock size={14} />
+                        Edit
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
