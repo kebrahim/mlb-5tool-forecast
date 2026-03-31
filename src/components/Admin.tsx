@@ -3,7 +3,7 @@ import { db, auth } from '../firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { doc, setDoc, updateDoc, collection, writeBatch, onSnapshot, getDocs, deleteDoc, query, Timestamp } from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
-import { Database, ShieldCheck, AlertCircle, Clock, RefreshCw, Power, ListOrdered, Play, Trash2, UserMinus, Mail } from 'lucide-react';
+import { Database, ShieldCheck, AlertCircle, Clock, RefreshCw, Power, ListOrdered, Play, Trash2, UserMinus, Mail, Search } from 'lucide-react';
 import { MLB_TEAMS, DEFAULT_LINES } from '../mlbData';
 import { UserProfile, Contest } from '../types';
 
@@ -70,36 +70,59 @@ export default function Admin() {
         (typeof c.end_time === 'string' ? new Date(c.end_time) : (c.end_time as any).toDate()).getTime() > now.getTime()
       );
 
-      if (contestsToSnapshot.length > 0 && teamLines.length > 0) {
+      if (contestsToSnapshot.length > 0 && !syncing) {
         console.log("Found contests needing auto-snapshot:", contestsToSnapshot.map(c => c.theme_name));
-        const batch = writeBatch(db);
         
-        contestsToSnapshot.forEach(contest => {
-          const statsMap: Record<string, number> = {};
-          teamLines.forEach(team => {
-            statsMap[team.id] = team.stats[contest.metric_key as keyof typeof team.stats] || 0;
-          });
-          
-          batch.update(doc(db, 'contests', contest.id), {
-            starting_stats: statsMap,
-            auto_snapshotted: true,
-            last_updated: new Date().toISOString()
-          });
-        });
-
         try {
+          setSyncing(true);
+          
+          const batch = writeBatch(db);
+          
+          for (const contest of contestsToSnapshot) {
+            toast.loading(`Capturing historical baseline for ${contest.theme_name}...`, { id: 'auto-snap' });
+            
+            // Calculate the day before the contest starts
+            const startDate = contest.start_time instanceof Timestamp ? contest.start_time.toDate() : new Date(contest.start_time);
+            const baselineDate = new Date(startDate);
+            baselineDate.setDate(baselineDate.getDate() - 1);
+            const dateStr = baselineDate.toISOString().split('T')[0];
+            
+            // Fetch historical stats for that date
+            const historicalStats = await fetchMLBStatsForDate(dateStr, false);
+            
+            const statsMap: Record<string, number> = {};
+            MLB_TEAMS.forEach(team => {
+              const stats = historicalStats[team.id];
+              if (stats) {
+                statsMap[team.id] = stats[contest.metric_key as keyof typeof stats] || 0;
+              } else {
+                statsMap[team.id] = 0;
+              }
+            });
+            
+            batch.update(doc(db, 'contests', contest.id), {
+              starting_stats: statsMap,
+              baseline_date: dateStr,
+              auto_snapshotted: true,
+              last_updated: new Date().toISOString()
+            });
+          }
+
           await batch.commit();
-          toast.success(`Automatically captured starting stats for ${contestsToSnapshot.length} contest(s)`);
+          toast.success(`Automatically captured historical baselines for ${contestsToSnapshot.length} contest(s)`, { id: 'auto-snap' });
         } catch (error) {
-          console.error("Auto-snapshot failed:", error);
+          console.error("Auto-snapshot historical fetch failed:", error);
+          toast.error("Auto-snapshot failed. Please trigger a manual snapshot.", { id: 'auto-snap' });
+        } finally {
+          setSyncing(false);
         }
       }
     };
 
-    if (contests.length > 0 && teamLines.length > 0) {
+    if (contests.length > 0) {
       checkAutoSnapshots();
     }
-  }, [contests, teamLines]);
+  }, [contests, syncing]);
 
   const generateDraftOrder = async (contestId: string) => {
     const contest = contests.find(c => c.id === contestId);
@@ -137,22 +160,143 @@ export default function Admin() {
     }
   };
 
+  const fetchMLBStatsForDate = async (dateStr: string, showToasts = true) => {
+    if (showToasts) toast.loading(`Fetching historical MLB stats for ${dateStr}...`, { id: 'hist-sync' });
+    
+    const season = dateStr.split('-')[0];
+    
+    // 1. Fetch Standings as of date (for Wins/Losses)
+    const standingsRes = await fetch(`https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=${season}&date=${dateStr}&standingsTypes=regularSeason`);
+    const standingsData = await standingsRes.json();
+    
+    const teamStats: Record<string, any> = {};
+    standingsData.records?.forEach((record: any) => {
+      record.teamRecords?.forEach((tr: any) => {
+        teamStats[tr.team.id.toString()] = {
+          wins: tr.wins,
+          losses: tr.losses,
+          hrs: 0,
+          ks: 0
+        };
+      });
+    });
+
+    // 2. Fetch Team Stats (HRs/Ks) using gameLog summation
+    // We use Promise.all to fetch all teams in parallel
+    const statsPromises = MLB_TEAMS.map(async (team) => {
+      try {
+        // Fetch hitting gameLog
+        const hitRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=gameLog&group=hitting&season=${season}&endDate=${dateStr}`);
+        const hitData = await hitRes.json();
+        
+        let totalHRs = 0;
+        hitData.stats?.[0]?.splits?.forEach((split: any) => {
+          totalHRs += split.stat?.homeRuns || 0;
+        });
+
+        // Fetch pitching gameLog
+        const pitchRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=gameLog&group=pitching&season=${season}&endDate=${dateStr}`);
+        const pitchData = await pitchRes.json();
+        
+        let totalKs = 0;
+        pitchData.stats?.[0]?.splits?.forEach((split: any) => {
+          totalKs += split.stat?.strikeOuts || 0;
+        });
+        
+        return {
+          id: team.id,
+          hrs: totalHRs,
+          ks: totalKs
+        };
+      } catch (e) {
+        console.error(`Error fetching historical stats for ${team.name}`, e);
+        return { id: team.id, hrs: 0, ks: 0 };
+      }
+    });
+
+    const allStats = await Promise.all(statsPromises);
+    allStats.forEach(stat => {
+      if (teamStats[stat.id]) {
+        teamStats[stat.id].hrs = stat.hrs;
+        teamStats[stat.id].ks = stat.ks;
+      } else {
+        // If team not in standings (unlikely but possible if no games played yet), still record stats
+        teamStats[stat.id.toString()] = {
+          wins: 0,
+          losses: 0,
+          hrs: stat.hrs,
+          ks: stat.ks
+        };
+      }
+    });
+
+    if (showToasts) toast.success(`Historical stats for ${dateStr} retrieved.`, { id: 'hist-sync' });
+    return teamStats;
+  };
+
+  const testMlbApi = async () => {
+    const testTeamId = "108"; // LAA
+    const testDate = "2024-04-10";
+    setSyncing(true);
+    try {
+      toast.loading(`Testing MLB API for LAA as of ${testDate}...`, { id: 'api-test' });
+      
+      // 1. Test hitting gameLog
+      const hitRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${testTeamId}/stats?stats=gameLog&group=hitting&season=2024&endDate=${testDate}`);
+      const hitData = await hitRes.json();
+      const games = hitData.stats?.[0]?.splits?.length || 0;
+      let hrs = 0;
+      hitData.stats?.[0]?.splits?.forEach((s: any) => hrs += s.stat.homeRuns);
+      
+      console.log(`API Test Results for LAA as of ${testDate}:`);
+      console.log(`Games found: ${games}`);
+      console.log(`Total HRs (summed): ${hrs}`);
+      
+      toast.success(`API Test Complete! Found ${games} games and ${hrs} HRs for LAA. Check console for details.`, { id: 'api-test' });
+    } catch (error: any) {
+      console.error("API Test Error:", error);
+      toast.error(`API Test Failed: ${error.message}`, { id: 'api-test' });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const snapshotStartingStats = async (contestId: string) => {
     const contest = contests.find(c => c.id === contestId);
     if (!contest) return;
 
-    const statsMap: Record<string, number> = {};
-    teamLines.forEach(team => {
-      statsMap[team.id] = team.stats[contest.metric_key] || 0;
-    });
-
     try {
-      await updateDoc(doc(db, 'contests', contestId), {
-        starting_stats: statsMap
+      setSyncing(true);
+      
+      // Calculate the day before the contest starts for the baseline
+      const startDate = contest.start_time instanceof Timestamp ? contest.start_time.toDate() : new Date(contest.start_time);
+      const baselineDate = new Date(startDate);
+      baselineDate.setDate(baselineDate.getDate() - 1);
+      const dateStr = baselineDate.toISOString().split('T')[0];
+
+      const historicalStats = await fetchMLBStatsForDate(dateStr, true);
+      
+      const statsMap: Record<string, number> = {};
+      MLB_TEAMS.forEach(team => {
+        const stats = historicalStats[team.id];
+        if (stats) {
+          statsMap[team.id] = stats[contest.metric_key as keyof typeof stats] || 0;
+        } else {
+          statsMap[team.id] = 0;
+        }
       });
-      toast.success(`Starting stats snapshotted for ${contest.theme_name}!`);
+
+      await updateDoc(doc(db, 'contests', contestId), {
+        starting_stats: statsMap,
+        baseline_date: dateStr
+      });
+      
+      toast.success(`Historical baseline (as of ${dateStr}) snapshotted for ${contest.theme_name}!`);
     } catch (error: any) {
+      console.error("Manual snapshot error:", error);
       toast.error(error.message);
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -236,74 +380,78 @@ export default function Admin() {
     }
   };
 
+  const performMLBSync = async (showToasts = true) => {
+    if (showToasts) toast.loading("Fetching MLB Standings...", { id: 'sync-status' });
+    
+    // 1. Fetch Standings
+    const standingsRes = await fetch("https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=2026&standingsTypes=regularSeason");
+    const standingsData = await standingsRes.json();
+    
+    if (!standingsData.records || standingsData.records.length === 0) {
+      throw new Error("No standings records found in MLB API for 2026.");
+    }
+
+    const teamStatsMap: Record<string, { wins: number, losses: number }> = {};
+    standingsData.records.forEach((record: any) => {
+      record.teamRecords?.forEach((tr: any) => {
+        teamStatsMap[tr.team.id.toString()] = {
+          wins: tr.wins,
+          losses: tr.losses
+        };
+      });
+    });
+
+    if (showToasts) toast.loading("Updating team stats...", { id: 'sync-status' });
+    
+    const batch = writeBatch(db);
+    let updatedCount = 0;
+
+    // Process teams in chunks to avoid overwhelming the browser/API
+    for (const team of MLB_TEAMS) {
+      const mlbStats = teamStatsMap[team.id];
+      if (mlbStats) {
+        try {
+          // Fetch HRs and Ks for each team
+          const [hitRes, pitchRes] = await Promise.all([
+            fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=season&group=hitting&season=2026`),
+            fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=season&group=pitching&season=2026`)
+          ]);
+          
+          const hitData = await hitRes.json();
+          const pitchData = await pitchRes.json();
+          
+          const hrs = hitData.stats?.[0]?.splits?.[0]?.stat?.homeRuns || 0;
+          const ks = pitchData.stats?.[0]?.splits?.[0]?.stat?.strikeOuts || 0;
+
+          batch.update(doc(db, 'team_lines', team.id), {
+            "stats.wins": mlbStats.wins,
+            "stats.losses": mlbStats.losses,
+            "stats.hrs": hrs,
+            "stats.ks": ks,
+            last_sync: new Date().toISOString()
+          });
+          updatedCount++;
+        } catch (e) {
+          console.warn(`Failed to fetch extra stats for ${team.name}`, e);
+          batch.update(doc(db, 'team_lines', team.id), {
+            "stats.wins": mlbStats.wins,
+            "stats.losses": mlbStats.losses,
+            last_sync: new Date().toISOString()
+          });
+          updatedCount++;
+        }
+      }
+    }
+
+    await batch.commit();
+    if (showToasts) toast.success(`Sync successful! ${updatedCount} teams updated.`, { id: 'sync-status' });
+    return updatedCount;
+  };
+
   const handleManualSync = async () => {
     setSyncing(true);
     try {
-      toast.loading("Fetching MLB Standings...", { id: 'sync-status' });
-      
-      // 1. Fetch Standings
-      const standingsRes = await fetch("https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=2026&standingsTypes=regularSeason");
-      const standingsData = await standingsRes.json();
-      
-      if (!standingsData.records || standingsData.records.length === 0) {
-        throw new Error("No standings records found in MLB API for 2026.");
-      }
-
-      const teamStatsMap: Record<string, { wins: number, losses: number }> = {};
-      standingsData.records.forEach((record: any) => {
-        record.teamRecords?.forEach((tr: any) => {
-          teamStatsMap[tr.team.id.toString()] = {
-            wins: tr.wins,
-            losses: tr.losses
-          };
-        });
-      });
-
-      toast.loading("Updating team stats...", { id: 'sync-status' });
-      
-      const batch = writeBatch(db);
-      let updatedCount = 0;
-
-      // Process teams in chunks to avoid overwhelming the browser/API
-      for (const team of MLB_TEAMS) {
-        const mlbStats = teamStatsMap[team.id];
-        if (mlbStats) {
-          try {
-            // Fetch HRs and Ks for each team
-            const [hitRes, pitchRes] = await Promise.all([
-              fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=season&group=hitting&season=2026`),
-              fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=season&group=pitching&season=2026`)
-            ]);
-            
-            const hitData = await hitRes.json();
-            const pitchData = await pitchRes.json();
-            
-            const hrs = hitData.stats?.[0]?.splits?.[0]?.stat?.homeRuns || 0;
-            const ks = pitchData.stats?.[0]?.splits?.[0]?.stat?.strikeOuts || 0;
-
-            batch.update(doc(db, 'team_lines', team.id), {
-              "stats.wins": mlbStats.wins,
-              "stats.losses": mlbStats.losses,
-              "stats.hrs": hrs,
-              "stats.ks": ks,
-              last_sync: new Date().toISOString()
-            });
-            updatedCount++;
-          } catch (e) {
-            console.warn(`Failed to fetch extra stats for ${team.name}`, e);
-            // Still update wins/losses even if HRs/Ks fail
-            batch.update(doc(db, 'team_lines', team.id), {
-              "stats.wins": mlbStats.wins,
-              "stats.losses": mlbStats.losses,
-              last_sync: new Date().toISOString()
-            });
-            updatedCount++;
-          }
-        }
-      }
-
-      await batch.commit();
-      toast.success(`Sync successful! ${updatedCount} teams updated.`, { id: 'sync-status' });
+      await performMLBSync(true);
     } catch (error: any) {
       console.error("Manual sync error:", error);
       toast.error('Sync failed: ' + error.message, { id: 'sync-status' });
@@ -518,14 +666,24 @@ export default function Admin() {
               MODE: MANUAL (BROWSER-BASED)
             </span>
           </div>
-          <button
-            onClick={handleManualSync}
-            disabled={syncing}
-            className="w-full px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-[10px] font-bold rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-700"
-          >
-            <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
-            {syncing ? 'Syncing...' : 'Sync Now (Manual Test)'}
-          </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button
+              onClick={testMlbApi}
+              disabled={syncing}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-[10px] font-bold rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-700"
+            >
+              <Search size={14} />
+              Verify MLB API
+            </button>
+            <button
+              onClick={handleManualSync}
+              disabled={syncing}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-[10px] font-bold rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-700"
+            >
+              <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
+              {syncing ? 'Syncing...' : 'Sync Now (Manual Test)'}
+            </button>
+          </div>
         </div>
 
         <div className="p-4 md:p-6 bg-slate-950 rounded-2xl border border-slate-800">

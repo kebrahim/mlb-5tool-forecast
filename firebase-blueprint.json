@@ -52,7 +52,12 @@
           "description": "Array of user UIDs in draft order"
         },
         "current_turn_index": { "type": "number" },
-        "draft_status": { "type": "string", "enum": ["pending", "in_progress", "completed"] }
+        "draft_status": { "type": "string", "enum": ["pending", "in_progress", "completed"] },
+        "starting_stats": {
+          "type": "object",
+          "description": "Map of team IDs to their stat values at the start of the contest",
+          "additionalProperties": { "type": "number" }
+        }
       },
       "required": ["theme_name", "metric_key", "start_time", "end_time", "is_active", "is_draft", "selection_limit", "use_chips"]
     },
