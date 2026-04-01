@@ -284,18 +284,18 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="h-screen bg-slate-950 text-slate-100 flex flex-col lg:flex-row overflow-hidden">
+    <div className="h-screen bg-[var(--color-leather-white)] text-slate-900 flex flex-col lg:flex-row overflow-hidden font-sans">
       {/* Mobile Top Bar */}
-      <div className="lg:hidden bg-slate-900 border-b border-slate-800 p-4 flex items-center justify-between z-50">
+      <div className="lg:hidden bg-white border-b-4 border-stitch p-4 flex items-center justify-between z-50 shadow-md">
         <div className="flex items-center gap-3">
           <span className="text-xl">⚾</span>
-          <span className="font-black text-sm bg-gradient-to-r from-emerald-400 to-emerald-600 bg-clip-text text-transparent">
+          <span className="font-varsity text-sm text-slate-900 uppercase tracking-tighter">
             MLB 5-TOOL
           </span>
         </div>
         <button 
           onClick={() => setIsSidebarOpen(true)}
-          className="p-2 hover:bg-slate-800 rounded-lg text-slate-400"
+          className="p-2 hover:bg-slate-100 rounded-lg text-slate-600"
         >
           <Menu size={24} />
         </button>
@@ -321,23 +321,23 @@ export default function Dashboard() {
           width: isMobile ? 280 : (isCollapsed ? 80 : 256),
           x: isMobile ? (isSidebarOpen ? 0 : -280) : 0
         }}
-        className={`bg-slate-900 border-r border-slate-800 flex flex-col p-4 fixed lg:sticky top-0 left-0 h-screen z-[70] ${isMobile ? 'shadow-2xl' : ''}`}
+        className={`bg-slate-900 border-r-4 border-stitch flex flex-col p-4 fixed lg:sticky top-0 left-0 h-screen z-[70] ${isMobile ? 'shadow-2xl' : ''}`}
       >
         <div className="mb-8 lg:mb-12 flex items-center justify-between px-2">
           {!isCollapsed && (
             <motion.h1 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="text-lg font-black flex items-center gap-3 leading-tight"
+              className="text-lg font-varsity flex items-center gap-3 leading-tight"
             >
               <span className="text-2xl drop-shadow-lg">⚾</span>
-              <span className="bg-gradient-to-r from-emerald-400 to-emerald-600 bg-clip-text text-transparent">
+              <span className="text-white uppercase tracking-tighter">
                 MLB 5-TOOL<br />FORECAST
               </span>
             </motion.h1>
           )}
           {isCollapsed && (
-            <div className="w-10 h-10 bg-emerald-600 rounded-lg flex items-center justify-center font-black shrink-0 text-white">5TF</div>
+            <div className="w-10 h-10 bg-[var(--color-stitch-red)] rounded-lg flex items-center justify-center font-varsity shrink-0 text-white shadow-lg">5T</div>
           )}
           <button 
             onClick={() => setIsCollapsed(!isCollapsed)}
@@ -360,22 +360,22 @@ export default function Dashboard() {
               setDashboardView('overview');
               setIsSidebarOpen(false);
             }}
-            className={`w-full flex items-center gap-4 p-3 rounded-xl transition-all cursor-pointer ${view === 'dashboard' && dashboardView === 'overview' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}
+            className={`w-full flex items-center gap-4 p-3 rounded-xl transition-all cursor-pointer font-varsity uppercase tracking-widest text-[10px] ${view === 'dashboard' && dashboardView === 'overview' ? 'bg-[var(--color-stitch-red)] text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
             title="Dashboard"
           >
-            <LayoutDashboard size={24} className="shrink-0" />
-            {!isCollapsed && <span className="font-bold truncate">Dashboard</span>}
+            <LayoutDashboard size={20} className="shrink-0" />
+            {!isCollapsed && <span className="truncate">Dashboard</span>}
           </div>
           <div 
             onClick={() => {
               setView('drafting');
               setIsSidebarOpen(false);
             }}
-            className={`w-full flex items-center gap-4 p-3 rounded-xl transition-all cursor-pointer ${view === 'drafting' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}
+            className={`w-full flex items-center gap-4 p-3 rounded-xl transition-all cursor-pointer font-varsity uppercase tracking-widest text-[10px] ${view === 'drafting' ? 'bg-[var(--color-stitch-red)] text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
             title="Drafting Room"
           >
-            <BarChart3 size={24} className="shrink-0" />
-            {!isCollapsed && <span className="font-bold truncate">Drafting Room</span>}
+            <BarChart3 size={20} className="shrink-0" />
+            {!isCollapsed && <span className="truncate">Drafting Room</span>}
           </div>
           <div 
             onClick={() => {
@@ -383,11 +383,11 @@ export default function Dashboard() {
               setIsSidebarOpen(false);
               if (activeContest) setDetailTab('standings');
             }}
-            className={`w-full flex items-center gap-4 p-3 rounded-xl transition-all cursor-pointer ${view === 'standings' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}
+            className={`w-full flex items-center gap-4 p-3 rounded-xl transition-all cursor-pointer font-varsity uppercase tracking-widest text-[10px] ${view === 'standings' ? 'bg-[var(--color-stitch-red)] text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
             title="Full Standings"
           >
-            <Trophy size={24} className="shrink-0" />
-            {!isCollapsed && <span className="font-bold truncate">Standings</span>}
+            <Trophy size={20} className="shrink-0" />
+            {!isCollapsed && <span className="truncate">Standings</span>}
           </div>
           {(user?.role === 'admin' || currentUserEmail?.toLowerCase() === 'kebrahim@gmail.com') && (
             <div 
@@ -395,17 +395,17 @@ export default function Dashboard() {
                 setView('admin');
                 setIsSidebarOpen(false);
               }}
-              className={`w-full flex items-center gap-4 p-3 rounded-xl transition-all cursor-pointer ${view === 'admin' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}
+              className={`w-full flex items-center gap-4 p-3 rounded-xl transition-all cursor-pointer font-varsity uppercase tracking-widest text-[10px] ${view === 'admin' ? 'bg-[var(--color-stitch-red)] text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
               title="Admin Panel"
             >
-              <Settings size={24} className="shrink-0" />
-              {!isCollapsed && <span className="font-bold truncate">Admin Panel</span>}
+              <Settings size={20} className="shrink-0" />
+              {!isCollapsed && <span className="truncate">Admin Panel</span>}
             </div>
           )}
 
           {!isCollapsed && contests.length > 0 && (
             <div className="mt-8 px-2">
-              <h3 className="text-[10px] uppercase tracking-[0.2em] font-black text-slate-500 mb-4 px-2">Active Contests</h3>
+              <h3 className="text-[9px] uppercase tracking-[0.2em] font-varsity text-slate-500 mb-4 px-2">Active Contests</h3>
               <div className="space-y-2">
                 {contests.filter(c => c.is_active).map(contest => (
                     <div
@@ -416,20 +416,17 @@ export default function Dashboard() {
                         setView('dashboard');
                         setIsSidebarOpen(false);
                       }}
-                      className={`w-full text-left p-3 rounded-xl transition-all border cursor-pointer ${
+                      className={`w-full text-left p-3 rounded-xl transition-all border-2 cursor-pointer ${
                         activeContest?.id === contest.id && dashboardView === 'detail' && view === 'dashboard'
-                          ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-500 shadow-lg shadow-emerald-500/5' 
+                          ? 'bg-white/10 border-[var(--color-stitch-red)] text-white shadow-lg' 
                           : 'border-transparent text-slate-400 hover:bg-slate-800 hover:text-slate-200'
                       }`}
                     >
                     <div className="flex items-center justify-between gap-2">
-                      <div className="text-xs font-bold truncate">{contest.theme_name}</div>
-                      <div className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest shrink-0 ${getContestStatus(contest).color}`}>
+                      <div className="text-[10px] font-varsity truncate uppercase tracking-tight">{contest.theme_name}</div>
+                      <div className={`px-1.5 py-0.5 rounded text-[7px] font-varsity uppercase tracking-widest shrink-0 ${getContestStatus(contest).color.replace('text-', 'text-white bg-').replace('bg-', 'bg-opacity-20 bg-')}`}>
                         {getContestStatus(contest).label}
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <div className="text-[9px] uppercase tracking-widest opacity-50 font-mono">{formatMetric(contest.metric_key)}</div>
                     </div>
                     </div>
                   ))}
@@ -441,16 +438,16 @@ export default function Dashboard() {
         <div className="mt-auto space-y-4">
           <button 
             onClick={() => auth.signOut()}
-            className="w-full flex items-center gap-4 p-3 rounded-xl text-rose-500 hover:bg-rose-500/10 transition-all"
+            className="w-full flex items-center gap-4 p-3 rounded-xl text-rose-400 hover:bg-rose-500/10 transition-all font-varsity uppercase tracking-widest text-[10px]"
             title="Logout"
           >
-            <LogOut size={24} className="shrink-0" />
-            {!isCollapsed && <span className="font-bold truncate">Logout</span>}
+            <LogOut size={20} className="shrink-0" />
+            {!isCollapsed && <span className="truncate">Logout</span>}
           </button>
 
-          <div className="p-2 bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden">
+          <div className="p-3 bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center font-bold text-emerald-500 shrink-0">
+              <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center font-varsity text-[var(--color-stitch-red)] border-2 border-stitch shrink-0 shadow-inner">
                 {user?.display_name?.[0]}
               </div>
               {!isCollapsed && (
@@ -459,9 +456,8 @@ export default function Dashboard() {
                   animate={{ opacity: 1 }}
                   className="overflow-hidden"
                 >
-                  <div className="text-sm font-bold truncate">{user?.display_name}</div>
-                  <div className="text-[10px] text-slate-500 truncate">{currentUserEmail}</div>
-                  <div className="text-[10px] text-emerald-500 uppercase tracking-widest font-bold">{user?.role}</div>
+                  <div className="text-xs font-varsity text-white truncate uppercase tracking-tight">{user?.display_name}</div>
+                  <div className="text-[9px] text-slate-500 truncate font-scorebook">{currentUserEmail}</div>
                 </motion.div>
               )}
             </div>
@@ -485,18 +481,18 @@ export default function Dashboard() {
                   <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                     <div>
                       <div className="flex items-center gap-3 mb-2">
-                        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                        <span className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em]">Live Contest Platform</span>
+                        <div className="w-2 h-2 bg-[var(--color-stitch-red)] rounded-full animate-pulse" />
+                        <span className="text-[10px] font-varsity text-slate-500 uppercase tracking-[0.3em]">Live Ballpark Platform</span>
                       </div>
-                      <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight">
-                        {dashboardView === 'overview' ? 'DASHBOARD' : activeContest?.theme_name.toUpperCase()}
+                      <h1 className="text-3xl md:text-5xl font-varsity text-slate-900 tracking-tighter uppercase leading-none">
+                        {dashboardView === 'overview' ? 'THE DUGOUT' : activeContest?.theme_name}
                       </h1>
                     </div>
                     
-                    <div className="flex items-center gap-2 bg-slate-900/50 p-1 rounded-2xl border border-slate-800">
+                    <div className="flex items-center gap-2 bg-white p-1 rounded-2xl border-2 border-slate-200 shadow-sm">
                       <button 
                         onClick={() => setDashboardView('overview')}
-                        className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${dashboardView === 'overview' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/40' : 'text-slate-500 hover:text-slate-300'}`}
+                        className={`px-6 py-2.5 rounded-xl text-[10px] font-varsity uppercase tracking-widest transition-all ${dashboardView === 'overview' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
                       >
                         Overview
                       </button>
@@ -506,7 +502,7 @@ export default function Dashboard() {
                             setDashboardView('detail');
                             setDetailTab('standings');
                           }}
-                          className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${dashboardView === 'detail' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/40' : 'text-slate-500 hover:text-slate-300'}`}
+                          className={`px-6 py-2.5 rounded-xl text-[10px] font-varsity uppercase tracking-widest transition-all ${dashboardView === 'detail' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
                         >
                           Standings
                         </button>
@@ -521,16 +517,17 @@ export default function Dashboard() {
                         <motion.div 
                           initial={{ opacity: 0, scale: 0.95 }}
                           animate={{ opacity: 1, scale: 1 }}
-                          className="bg-amber-500 p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border border-amber-400 shadow-xl shadow-amber-500/20 flex flex-col sm:flex-row items-center justify-between gap-4 md:gap-6"
+                          className="bg-field p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border-4 border-white/20 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4 md:gap-6 relative overflow-hidden"
                         >
-                          <div className="flex items-center gap-4 md:gap-6">
-                            <div className="w-12 h-12 md:w-16 md:h-16 bg-slate-950/20 rounded-xl md:rounded-2xl flex items-center justify-center text-slate-950 shrink-0">
-                              <Play size={24} className="md:w-8 md:h-8" />
+                          <div className="absolute top-0 right-0 w-32 h-32 border-4 border-white/10 border-dashed rounded-full -mr-16 -mt-16" />
+                          <div className="flex items-center gap-4 md:gap-6 relative z-10">
+                            <div className="w-12 h-12 md:w-16 md:h-16 bg-white rounded-full flex items-center justify-center text-slate-900 shrink-0 shadow-lg">
+                              <span className="text-2xl md:text-3xl">⚾</span>
                             </div>
                             <div>
-                              <div className="text-[8px] md:text-[10px] font-black text-slate-950/60 uppercase tracking-[0.2em]">Action Required</div>
-                              <h3 className="text-lg md:text-2xl font-black text-slate-950 leading-tight">IT'S YOUR TURN TO PICK!</h3>
-                              <p className="text-slate-950/70 text-xs md:text-sm font-bold">You are on the clock in {contestsWithMyTurn[0].theme_name}</p>
+                              <div className="text-[8px] md:text-[10px] font-varsity text-white/60 uppercase tracking-[0.2em]">Batter Up!</div>
+                              <h3 className="text-lg md:text-2xl font-varsity text-white leading-tight uppercase tracking-tighter">IT'S YOUR TURN TO PICK!</h3>
+                              <p className="text-white/80 text-xs md:text-sm font-scorebook">You are on the clock in {contestsWithMyTurn[0].theme_name}</p>
                             </div>
                           </div>
                           <button 
@@ -538,9 +535,9 @@ export default function Dashboard() {
                               setActiveContest(contestsWithMyTurn[0]);
                               setView('drafting');
                             }}
-                            className="w-full sm:w-auto px-6 md:px-8 py-3 md:py-4 bg-slate-950 text-white text-xs md:text-sm font-black rounded-xl hover:bg-slate-800 transition-all active:scale-95 whitespace-nowrap"
+                            className="w-full sm:w-auto px-6 md:px-8 py-3 md:py-4 bg-white text-slate-900 text-xs md:text-sm font-varsity uppercase tracking-widest rounded-xl hover:bg-slate-100 transition-all active:scale-95 whitespace-nowrap shadow-lg relative z-10"
                           >
-                            GO TO DRAFT ROOM
+                            GO TO ON-DECK CIRCLE
                           </button>
                         </motion.div>
                       )}
@@ -573,40 +570,40 @@ export default function Dashboard() {
                       {/* Championship Standings */}
                       <section className="space-y-4 md:space-y-6">
                         <div className="flex items-center justify-between">
-                          <h2 className="text-xl md:text-2xl font-black text-white flex items-center gap-3">
-                            <Trophy className="text-amber-500" size={24} />
-                            CHAMPIONSHIP STANDINGS
+                          <h2 className="text-xl md:text-2xl font-varsity text-slate-900 flex items-center gap-3 uppercase tracking-tighter">
+                            <Trophy className="text-[var(--color-stitch-red)]" size={24} />
+                            LEAGUE STANDINGS
                           </h2>
-                          <div className="hidden sm:block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Season 2026</div>
+                          <div className="hidden sm:block text-[10px] font-varsity text-slate-500 uppercase tracking-[0.2em]">Season 2026</div>
                         </div>
                         
-                        <div className="bg-slate-900 rounded-[1.5rem] md:rounded-[2.5rem] border border-slate-800 overflow-hidden shadow-2xl">
-                          <div className="grid grid-cols-12 px-4 md:px-8 py-3 md:py-4 bg-slate-950/50 border-b border-slate-800 text-[8px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                        <div className="bg-scorebook rounded-[1.5rem] md:rounded-[2.5rem] border-4 border-stitch overflow-hidden shadow-xl">
+                          <div className="grid grid-cols-12 px-4 md:px-8 py-3 md:py-4 bg-slate-100/50 border-b-2 border-slate-200 text-[8px] md:text-[10px] font-varsity text-slate-500 uppercase tracking-widest">
                             <div className="col-span-2 md:col-span-1">Rank</div>
                             <div className="col-span-6 md:col-span-7">Contestant</div>
                             <div className="col-span-4 text-right">Total CP</div>
                           </div>
-                          <div className="divide-y divide-slate-800/50">
+                          <div className="divide-y divide-slate-200">
                             {leaderboard.map((player, idx) => {
                               const rank = leaderboard.findIndex(p => p.total_cp === player.total_cp) + 1;
                               return (
                                 <div 
                                   key={player.uid}
-                                  className="grid grid-cols-12 px-4 md:px-8 py-3 md:py-5 items-center hover:bg-slate-800/30 transition-colors group"
+                                  className="grid grid-cols-12 px-4 md:px-8 py-3 md:py-5 items-center hover:bg-blue-50/30 transition-colors group"
                                 >
-                                  <div className="col-span-2 md:col-span-1 font-mono text-slate-500 text-xs md:text-sm">{rank}</div>
+                                  <div className="col-span-2 md:col-span-1 font-scorebook text-slate-500 text-xs md:text-sm">{rank}</div>
                                   <div className="col-span-6 md:col-span-7 flex items-center gap-3 md:gap-4">
-                                    <div className="w-8 h-8 md:w-10 md:h-10 bg-slate-950 rounded-xl md:rounded-2xl flex items-center justify-center font-black text-emerald-500 border border-slate-800 group-hover:border-emerald-500/50 transition-colors shrink-0 text-xs md:text-base">
+                                    <div className="w-8 h-8 md:w-10 md:h-10 bg-white rounded-full flex items-center justify-center font-varsity text-[var(--color-stitch-red)] border-2 border-stitch group-hover:scale-110 transition-transform shrink-0 text-xs md:text-base shadow-sm">
                                       {player.display_name?.[0]}
                                     </div>
                                     <div className="flex flex-col min-w-0">
-                                      <span className="font-black text-white group-hover:text-emerald-500 transition-colors truncate text-xs md:text-base">{player.display_name}</span>
-                                      <span className="text-[8px] md:text-[10px] text-slate-500 uppercase tracking-widest font-bold truncate">{player.role}</span>
+                                      <span className="font-varsity text-slate-900 group-hover:text-[var(--color-stitch-red)] transition-colors truncate text-xs md:text-base uppercase tracking-tight">{player.display_name}</span>
+                                      <span className="text-[8px] md:text-[10px] text-slate-500 uppercase tracking-widest font-varsity truncate">{player.role}</span>
                                     </div>
                                   </div>
                                   <div className="col-span-4 text-right">
-                                    <span className="text-lg md:text-2xl font-black text-emerald-500 tabular-nums tracking-tighter">{player.total_cp}</span>
-                                    <span className="text-[8px] md:text-[10px] font-black text-slate-500 ml-1 md:ml-2">CP</span>
+                                    <span className="text-lg md:text-2xl font-varsity text-slate-900 tabular-nums tracking-tighter">{player.total_cp}</span>
+                                    <span className="text-[8px] md:text-[10px] font-varsity text-slate-500 ml-1 md:ml-2 uppercase">CP</span>
                                   </div>
                                 </div>
                               );
@@ -618,11 +615,11 @@ export default function Dashboard() {
                       {/* Contest List */}
                       <section className="space-y-4 md:space-y-6">
                         <div className="flex items-center justify-between">
-                          <h2 className="text-xl md:text-2xl font-black text-white flex items-center gap-3">
-                            <LayoutDashboard className="text-blue-500" size={24} />
-                            AVAILABLE CONTESTS
+                          <h2 className="text-xl md:text-2xl font-varsity text-slate-900 flex items-center gap-3 uppercase tracking-tighter">
+                            <LayoutDashboard className="text-blue-600" size={24} />
+                            BALLPARK CONTESTS
                           </h2>
-                          <div className="hidden sm:block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Active & Upcoming</div>
+                          <div className="hidden sm:block text-[10px] font-varsity text-slate-500 uppercase tracking-[0.2em]">Active & Upcoming</div>
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -635,27 +632,27 @@ export default function Dashboard() {
                                   setActiveContest(contest);
                                   setDashboardView('detail');
                                 }}
-                                className="p-4 md:p-6 bg-slate-900 rounded-[1.5rem] md:rounded-[2rem] border border-slate-800 hover:border-emerald-500/50 transition-all text-left group relative overflow-hidden shadow-xl cursor-pointer"
+                                className="p-4 md:p-6 bg-white rounded-[1.5rem] md:rounded-[2rem] border-2 border-slate-200 hover:border-[var(--color-stitch-red)] transition-all text-left group relative overflow-hidden shadow-lg cursor-pointer"
                               >
-                                <div className="absolute inset-0 bg-emerald-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <div className="absolute inset-0 bg-[var(--color-stitch-red)]/5 opacity-0 group-hover:opacity-100 transition-opacity" />
                                 <div className="relative z-10 flex flex-col h-full">
                                   <div className="flex justify-between items-start mb-3 md:mb-4">
-                                    <div className={`px-2 md:px-3 py-0.5 md:py-1 rounded-lg md:rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest ${status.color}`}>
+                                    <div className={`px-2 md:px-3 py-0.5 md:py-1 rounded-lg md:rounded-xl text-[8px] md:text-[10px] font-varsity uppercase tracking-widest ${status.color.replace('text-', 'text-white bg-').replace('bg-', 'bg-opacity-80 bg-')}`}>
                                       {status.label}
                                     </div>
-                                    <div className="w-8 h-8 md:w-10 md:h-10 bg-slate-950 rounded-lg md:rounded-xl flex items-center justify-center text-slate-500 group-hover:text-emerald-500 transition-colors">
+                                    <div className="w-8 h-8 md:w-10 md:h-10 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 group-hover:text-[var(--color-stitch-red)] transition-colors border border-slate-200">
                                       <ChevronRight size={16} className="md:w-5 md:h-5" />
                                     </div>
                                   </div>
-                                  <h3 className="text-lg md:text-xl font-black text-white mb-2 group-hover:text-emerald-500 transition-colors">{contest.theme_name}</h3>
+                                  <h3 className="text-lg md:text-xl font-varsity text-slate-900 mb-2 group-hover:text-[var(--color-stitch-red)] transition-colors uppercase tracking-tight">{contest.theme_name}</h3>
                                   
                                   <div className="flex flex-col gap-1 mb-3 md:mb-4">
-                                    <div className="flex items-center gap-2 text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                      <Calendar size={10} className="text-emerald-500 md:w-3 md:h-3" />
+                                    <div className="flex items-center gap-2 text-[8px] md:text-[10px] font-varsity text-slate-500 uppercase tracking-widest">
+                                      <Calendar size={10} className="text-[var(--color-stitch-red)] md:w-3 md:h-3" />
                                       <span>Starts: {parseDate(contest.start_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                                     </div>
-                                    <div className="flex items-center gap-2 text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                      <Calendar size={10} className="text-rose-500 md:w-3 md:h-3" />
+                                    <div className="flex items-center gap-2 text-[8px] md:text-[10px] font-varsity text-slate-500 uppercase tracking-widest">
+                                      <Calendar size={10} className="text-slate-400 md:w-3 md:h-3" />
                                       <span>Ends: {parseDate(contest.end_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                                     </div>
                                   </div>
@@ -668,7 +665,7 @@ export default function Dashboard() {
                                         setDashboardView('detail');
                                         setDetailTab('my_slip');
                                       }}
-                                      className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black rounded-xl transition-all uppercase tracking-widest text-center cursor-pointer"
+                                      className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-varsity rounded-xl transition-all uppercase tracking-widest text-center cursor-pointer"
                                     >
                                       My Slip
                                     </div>
@@ -679,7 +676,7 @@ export default function Dashboard() {
                                         setDashboardView('detail');
                                         setDetailTab('standings');
                                       }}
-                                      className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black rounded-xl transition-all uppercase tracking-widest shadow-lg shadow-emerald-900/20 text-center cursor-pointer"
+                                      className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 text-white text-[10px] font-varsity rounded-xl transition-all uppercase tracking-widest shadow-md text-center cursor-pointer"
                                     >
                                       Standings
                                     </div>
@@ -695,48 +692,48 @@ export default function Dashboard() {
                     <div className="space-y-8">
                       <button 
                         onClick={() => setDashboardView('overview')}
-                        className="flex items-center gap-2 text-[10px] font-black text-slate-500 hover:text-white uppercase tracking-[0.2em] transition-colors"
+                        className="flex items-center gap-2 text-[10px] font-varsity text-slate-500 hover:text-slate-900 uppercase tracking-[0.2em] transition-colors"
                       >
                         <ChevronLeft size={16} />
-                        Back to Overview
+                        Back to Dugout
                       </button>
 
                       {activeContest && (
                         <>
-                          <div className="bg-slate-900 p-8 rounded-[2.5rem] border border-slate-800 shadow-2xl relative overflow-hidden">
-                            <div className="absolute inset-0 bg-emerald-500/5" />
+                          <div className="bg-white p-8 rounded-[2.5rem] border-4 border-stitch shadow-xl relative overflow-hidden">
+                            <div className="absolute inset-0 bg-blue-50/30" />
                             <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
                               <div className="flex-1">
                                 <div className="flex items-center gap-3 mb-4">
-                                  <div className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest ${getContestStatus(activeContest).color}`}>
+                                  <div className={`px-3 py-1 rounded-xl text-[10px] font-varsity uppercase tracking-widest ${getContestStatus(activeContest).color.replace('text-', 'text-white bg-').replace('bg-', 'bg-opacity-80 bg-')}`}>
                                     {getContestStatus(activeContest).label}
                                   </div>
-                                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">
+                                  <span className="text-[10px] font-varsity text-slate-500 uppercase tracking-[0.2em]">
                                     {activeContest.is_draft ? 'Snake Draft' : 'Selection Room'}
                                   </span>
                                 </div>
-                                <h1 className="text-4xl font-black text-white mb-4">{activeContest.theme_name}</h1>
+                                <h1 className="text-4xl md:text-5xl font-varsity text-slate-900 mb-4 uppercase tracking-tighter leading-none">{activeContest.theme_name}</h1>
                                 {activeContest.description && (
-                                  <p className="text-slate-400 text-sm mb-6 max-w-2xl leading-relaxed">
+                                  <p className="text-slate-600 text-sm mb-6 max-w-2xl leading-relaxed font-scorebook">
                                     {activeContest.description}
                                   </p>
                                 )}
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
                                   <div>
-                                    <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Metric</div>
-                                    <div className="text-xs font-bold text-emerald-500 uppercase">{formatMetric(activeContest.metric_key)}</div>
+                                    <div className="text-[8px] font-varsity text-slate-500 uppercase tracking-widest mb-1">Metric</div>
+                                    <div className="text-xs font-varsity text-blue-600 uppercase">{formatMetric(activeContest.metric_key)}</div>
                                   </div>
                                   <div>
-                                    <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Limit</div>
-                                    <div className="text-xs font-bold text-white">{activeContest.selection_limit} Teams</div>
+                                    <div className="text-[8px] font-varsity text-slate-500 uppercase tracking-widest mb-1">Limit</div>
+                                    <div className="text-xs font-varsity text-slate-900">{activeContest.selection_limit} Teams</div>
                                   </div>
                                   <div>
-                                    <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Starts</div>
-                                    <div className="text-xs font-bold text-white">{parseDate(activeContest.start_time).toLocaleDateString()}</div>
+                                    <div className="text-[8px] font-varsity text-slate-500 uppercase tracking-widest mb-1">Starts</div>
+                                    <div className="text-xs font-varsity text-slate-900">{parseDate(activeContest.start_time).toLocaleDateString()}</div>
                                   </div>
                                   <div>
-                                    <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Ends</div>
-                                    <div className="text-xs font-bold text-white">{parseDate(activeContest.end_time).toLocaleDateString()}</div>
+                                    <div className="text-[8px] font-varsity text-slate-500 uppercase tracking-widest mb-1">Ends</div>
+                                    <div className="text-xs font-varsity text-slate-900">{parseDate(activeContest.end_time).toLocaleDateString()}</div>
                                   </div>
                                 </div>
                               </div>
@@ -744,10 +741,10 @@ export default function Dashboard() {
                               {!isLocked && (
                                 <button 
                                   onClick={() => setView('drafting')}
-                                  className="w-full md:w-auto px-10 py-5 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-2xl shadow-lg shadow-emerald-900/40 transition-all active:scale-95 flex items-center justify-center gap-3"
+                                  className="w-full md:w-auto px-10 py-5 bg-slate-900 hover:bg-slate-800 text-white font-varsity uppercase tracking-widest rounded-2xl shadow-xl transition-all active:scale-95 flex items-center justify-center gap-3"
                                 >
                                   <Play size={20} />
-                                  {userEntry ? 'EDIT PICKS' : 'ENTER CONTEST'}
+                                  {userEntry ? 'EDIT PICKS' : 'STEP TO THE PLATE'}
                                 </button>
                               )}
                             </div>
@@ -755,16 +752,16 @@ export default function Dashboard() {
 
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                             <div className="lg:col-span-3 space-y-6">
-                              <div className="flex items-center gap-4 border-b border-slate-800 pb-4">
+                              <div className="flex items-center gap-4 border-b-2 border-slate-200 pb-4">
                                 <button 
                                   onClick={() => setDetailTab('my_slip')}
-                                  className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${detailTab === 'my_slip' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/40' : 'text-slate-500 hover:text-slate-300'}`}
+                                  className={`px-6 py-2 rounded-xl text-[10px] font-varsity uppercase tracking-widest transition-all ${detailTab === 'my_slip' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
                                 >
                                   My Slip
                                 </button>
                                 <button 
                                   onClick={() => setDetailTab('standings')}
-                                  className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${detailTab === 'standings' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/40' : 'text-slate-500 hover:text-slate-300'}`}
+                                  className={`px-6 py-2 rounded-xl text-[10px] font-varsity uppercase tracking-widest transition-all ${detailTab === 'standings' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
                                 >
                                   Full Standings
                                 </button>
@@ -773,8 +770,8 @@ export default function Dashboard() {
                               {detailTab === 'my_slip' ? (
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                                   <div className="lg:col-span-2 space-y-6">
-                                    <h2 className="text-xl font-black text-white flex items-center gap-3">
-                                      <ChevronRight className="text-emerald-500" size={20} />
+                                    <h2 className="text-xl font-varsity text-slate-900 flex items-center gap-3 uppercase tracking-tighter">
+                                      <ChevronRight className="text-[var(--color-stitch-red)]" size={20} />
                                       MY ACTIVE SLIP
                                     </h2>
                                     
@@ -790,18 +787,18 @@ export default function Dashboard() {
                                             const isStarted = parseDate(activeContest.start_time) <= new Date();
                                             const metricValue = isStarted ? Math.max(0, rawValue - startValue) : 0;
                                             return (
-                                              <div key={sel.team_id} className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-lg flex justify-between items-center">
+                                              <div key={sel.team_id} className="bg-scorebook p-6 rounded-2xl border-2 border-slate-200 shadow-md flex justify-between items-center group hover:border-[var(--color-stitch-red)] transition-all">
                                                 <div>
-                                                  <h3 className="font-black text-lg text-white">{team.team_name}</h3>
-                                                  <div className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-black">
+                                                  <h3 className="font-varsity text-lg text-slate-900 uppercase tracking-tight">{team.team_name}</h3>
+                                                  <div className="text-[10px] text-slate-500 uppercase tracking-widest font-varsity">
                                                     {activeContest.is_draft ? 'Draft Pick' : 'Selection'}
                                                   </div>
                                                 </div>
                                                 <div className="text-right">
-                                                  <div className="text-3xl font-black text-emerald-500 tabular-nums">
+                                                  <div className="text-3xl font-varsity text-blue-600 tabular-nums tracking-tighter">
                                                     {metricValue}
                                                   </div>
-                                                  <div className="text-[10px] text-slate-500 uppercase tracking-widest font-black">
+                                                  <div className="text-[10px] text-slate-500 uppercase tracking-widest font-varsity">
                                                     {formatMetric(activeContest.metric_key)}
                                                   </div>
                                                 </div>
@@ -819,29 +816,29 @@ export default function Dashboard() {
                                             : team.stats.wins > team.ou_line;
 
                                           return (
-                                            <div key={sel.team_id} className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-lg">
+                                            <div key={sel.team_id} className="bg-scorebook p-6 rounded-2xl border-2 border-slate-200 shadow-md group hover:border-[var(--color-stitch-red)] transition-all">
                                               <div className="flex justify-between items-center mb-4">
                                                 <div>
-                                                  <h3 className="font-black text-lg text-white">{team.team_name}</h3>
-                                                  <div className="text-[10px] text-slate-500 uppercase tracking-widest font-black">
-                                                    {sel.side} {team.ou_line} • {sel.chips} Chips {isClinched && <span className="text-emerald-500 ml-2">CLINCHED</span>}
-                                                    {isEliminated && <span className="text-rose-500 ml-2">ELIMINATED</span>}
+                                                  <h3 className="font-varsity text-lg text-slate-900 uppercase tracking-tight">{team.team_name}</h3>
+                                                  <div className="text-[10px] text-slate-500 uppercase tracking-widest font-varsity">
+                                                    {sel.side} {team.ou_line} • {sel.chips} Chips {isClinched && <span className="text-emerald-600 ml-2">CLINCHED</span>}
+                                                    {isEliminated && <span className="text-rose-600 ml-2">ELIMINATED</span>}
                                                   </div>
                                                 </div>
                                                 <div className="text-right">
-                                                  <div className={`text-2xl font-black tabular-nums ${isClinched ? 'text-emerald-500' : isEliminated ? 'text-rose-500' : 'text-slate-400'}`}>
+                                                  <div className={`text-2xl font-varsity tabular-nums tracking-tighter ${isClinched ? 'text-emerald-600' : isEliminated ? 'text-rose-600' : 'text-slate-400'}`}>
                                                     {team.stats.wins} - {team.stats.losses}
                                                   </div>
-                                                  <div className="text-[10px] text-slate-500 uppercase tracking-widest font-black">Current Record</div>
+                                                  <div className="text-[10px] text-slate-500 uppercase tracking-widest font-varsity">Current Record</div>
                                                 </div>
                                               </div>
-                                              <div className="relative h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                                              <div className="relative h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
                                                 <div 
-                                                  className={`absolute top-0 left-0 h-full transition-all duration-1000 ${isClinched ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : isEliminated ? 'bg-rose-500' : 'bg-slate-700'}`}
+                                                  className={`absolute top-0 left-0 h-full transition-all duration-1000 ${isClinched ? 'bg-emerald-500' : isEliminated ? 'bg-rose-500' : 'bg-slate-400'}`}
                                                   style={{ width: `${Math.min(progress, 100)}%` }}
                                                 />
                                                 <div 
-                                                  className="absolute top-0 h-full border-r-2 border-white/20 z-10"
+                                                  className="absolute top-0 h-full border-r-2 border-slate-300 z-10"
                                                   style={{ left: '50%' }}
                                                 />
                                               </div>
@@ -850,14 +847,14 @@ export default function Dashboard() {
                                         })}
                                       </div>
                                     ) : (
-                                      <div className="bg-slate-900 p-12 rounded-[2rem] border border-dashed border-slate-800 text-center">
-                                        <p className="text-slate-500 mb-6 text-sm">No active entry found for this contest.</p>
+                                      <div className="bg-slate-50 p-12 rounded-[2rem] border-4 border-dashed border-slate-200 text-center">
+                                        <p className="text-slate-500 mb-6 text-sm font-scorebook">No active entry found for this contest.</p>
                                         {!isLocked && (
                                           <button 
                                             onClick={() => setView('drafting')}
-                                            className="px-8 py-3 bg-slate-800 hover:bg-slate-700 text-white font-black rounded-xl transition-all"
+                                            className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white font-varsity uppercase tracking-widest rounded-xl transition-all shadow-lg"
                                           >
-                                            Enter Contest
+                                            Step to the Plate
                                           </button>
                                         )}
                                       </div>
@@ -865,25 +862,25 @@ export default function Dashboard() {
                                   </div>
 
                                   <div className="space-y-6">
-                                    <h2 className="text-xl font-black text-white flex items-center gap-3">
-                                      <Users className="text-emerald-500" size={20} />
+                                    <h2 className="text-xl font-varsity text-slate-900 flex items-center gap-3 uppercase tracking-tighter">
+                                      <Users className="text-[var(--color-stitch-red)]" size={20} />
                                       CONTESTANTS
                                     </h2>
-                                    <div className="bg-slate-900 rounded-[2rem] border border-slate-800 overflow-hidden shadow-2xl">
+                                    <div className="bg-scorebook rounded-[2rem] border-4 border-stitch overflow-hidden shadow-xl">
                                       {leaderboard.map((player, idx) => (
                                         <div
                                           key={player.uid}
                                           onClick={() => showRival(player)}
-                                          className="w-full flex items-center justify-between p-4 hover:bg-slate-800 transition-colors border-b border-slate-800/50 last:border-0 group cursor-pointer"
+                                          className="w-full flex items-center justify-between p-4 hover:bg-blue-50/30 transition-colors border-b-2 border-slate-100 last:border-0 group cursor-pointer"
                                         >
                                           <div className="flex items-center gap-4">
-                                            <span className="text-[10px] font-mono text-slate-500 w-4">{idx + 1}</span>
-                                            <div className="w-8 h-8 bg-slate-950 rounded-xl flex items-center justify-center text-[10px] font-black text-emerald-500 border border-slate-800 group-hover:border-emerald-500/50 transition-colors">
+                                            <span className="text-[10px] font-varsity text-slate-400 w-4">{idx + 1}</span>
+                                            <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-[10px] font-varsity text-[var(--color-stitch-red)] border-2 border-stitch group-hover:scale-110 transition-transform">
                                               {player.display_name?.[0]}
                                             </div>
-                                            <span className="font-bold text-sm text-slate-200 group-hover:text-white transition-colors">{player.display_name}</span>
+                                            <span className="font-varsity text-sm text-slate-900 group-hover:text-[var(--color-stitch-red)] transition-colors uppercase tracking-tight">{player.display_name}</span>
                                           </div>
-                                          <ChevronRight size={14} className="text-slate-600 group-hover:text-emerald-500 transition-colors" />
+                                          <ChevronRight size={14} className="text-slate-400 group-hover:text-[var(--color-stitch-red)] transition-colors" />
                                         </div>
                                       ))}
                                     </div>
@@ -892,23 +889,23 @@ export default function Dashboard() {
                               ) : (
                                 <div className="space-y-6">
                                   <div className="flex items-center justify-between">
-                                    <h2 className="text-xl font-black text-white flex items-center gap-3">
-                                      <BarChart3 className="text-emerald-500" size={20} />
+                                    <h2 className="text-xl font-varsity text-slate-900 flex items-center gap-3 uppercase tracking-tighter">
+                                      <BarChart3 className="text-blue-600" size={20} />
                                       FULL STANDINGS
                                     </h2>
-                                    <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">
+                                    <div className="text-[10px] font-varsity text-slate-500 uppercase tracking-[0.2em]">
                                       {allEntries.length} Contestants
                                     </div>
                                   </div>
 
-                                  <div className="bg-slate-900 rounded-[1.5rem] md:rounded-[2rem] border border-slate-800 overflow-hidden shadow-2xl">
-                                    <div className="grid grid-cols-12 px-4 md:px-8 py-4 bg-slate-950/50 border-b border-slate-800 text-[8px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                  <div className="bg-scorebook rounded-[1.5rem] md:rounded-[2rem] border-4 border-stitch overflow-hidden shadow-xl">
+                                    <div className="grid grid-cols-12 px-4 md:px-8 py-4 bg-slate-50 border-b-2 border-slate-200 text-[8px] md:text-[10px] font-varsity text-slate-500 uppercase tracking-widest">
                                       <div className="col-span-2 md:col-span-1">Rank</div>
                                       <div className="col-span-6 md:col-span-3">Contestant</div>
                                       <div className="hidden md:block col-span-6">Selections & Records</div>
                                       <div className="col-span-4 md:col-span-2 text-right">Score</div>
                                     </div>
-                                    <div className="divide-y divide-slate-800/50">
+                                    <div className="divide-y-2 divide-slate-100">
                                       {sortedEntries.map((entry, idx) => {
                                         const player = leaderboard.find(p => p.uid === entry.uid);
                                         if (!player) return null;
@@ -916,25 +913,25 @@ export default function Dashboard() {
                                         const rank = sortedEntries.findIndex(e => e.score === entry.score) + 1;
 
                                         return (
-                                          <div key={entry.uid} className="flex flex-col md:grid md:grid-cols-12 px-4 md:px-8 py-4 md:py-6 md:items-center hover:bg-slate-800/30 transition-colors group gap-4 md:gap-0">
+                                          <div key={entry.uid} className="flex flex-col md:grid md:grid-cols-12 px-4 md:px-8 py-4 md:py-6 md:items-center hover:bg-blue-50/30 transition-colors group gap-4 md:gap-0">
                                             <div className="flex items-center justify-between md:contents">
-                                              <div className="col-span-2 md:col-span-1 font-mono text-slate-500 text-xs md:text-sm">{rank}</div>
+                                              <div className="col-span-2 md:col-span-1 font-scorebook text-slate-500 text-xs md:text-sm">{rank}</div>
                                               
                                               <div className="col-span-6 md:col-span-3 flex items-center gap-3 md:gap-4">
-                                                <div className="w-8 h-8 md:w-10 md:h-10 bg-slate-950 rounded-xl md:rounded-2xl flex items-center justify-center font-black text-emerald-500 border border-slate-800 group-hover:border-emerald-500/50 transition-colors shrink-0 text-xs md:text-base">
+                                                <div className="w-8 h-8 md:w-10 md:h-10 bg-white rounded-full flex items-center justify-center font-varsity text-[var(--color-stitch-red)] border-2 border-stitch group-hover:scale-110 transition-transform shrink-0 text-xs md:text-base shadow-sm">
                                                   {player.display_name?.[0]}
                                                 </div>
                                                 <div className="flex flex-col min-w-0">
-                                                  <span className="font-black text-white group-hover:text-emerald-500 transition-colors truncate text-xs md:text-base">{player.display_name}</span>
-                                                  <span className="text-[8px] md:text-[10px] text-slate-500 uppercase tracking-widest font-bold truncate">{player.role}</span>
+                                                  <span className="font-varsity text-slate-900 group-hover:text-[var(--color-stitch-red)] transition-colors truncate text-xs md:text-base uppercase tracking-tight">{player.display_name}</span>
+                                                  <span className="text-[8px] md:text-[10px] text-slate-500 uppercase tracking-widest font-varsity truncate">{player.role}</span>
                                                 </div>
                                               </div>
 
                                               <div className="md:hidden text-right">
-                                                <div className="text-lg font-black text-emerald-500 tabular-nums tracking-tighter">
+                                                <div className="text-lg font-varsity text-blue-600 tabular-nums tracking-tighter">
                                                   {entry.score}
                                                 </div>
-                                                <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest">
+                                                <div className="text-[8px] font-varsity text-slate-500 uppercase tracking-widest">
                                                   {formatMetric(activeContest.metric_key)}
                                                 </div>
                                               </div>
@@ -960,27 +957,27 @@ export default function Dashboard() {
                                                   return (
                                                     <div 
                                                       key={sel.team_id}
-                                                      className={`px-2 md:px-3 py-1 md:py-1.5 rounded-lg md:rounded-xl border flex items-center gap-1.5 md:gap-2 transition-all ${
+                                                      className={`px-2 md:px-3 py-1 md:py-1.5 rounded-lg md:rounded-xl border-2 flex items-center gap-1.5 md:gap-2 transition-all ${
                                                         isClinched 
-                                                          ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.1)]' 
+                                                          ? 'bg-emerald-50 border-emerald-200 text-emerald-600 shadow-sm' 
                                                           : isEliminated
-                                                            ? 'bg-rose-500/10 border-rose-500/40 text-rose-400'
-                                                            : 'bg-slate-800/50 border-slate-700 text-slate-400'
+                                                            ? 'bg-rose-50 border-rose-200 text-rose-600'
+                                                            : 'bg-white border-slate-100 text-slate-500'
                                                       }`}
                                                     >
                                                       <div className="flex flex-col items-start leading-none">
-                                                        <span className="text-[9px] md:text-[10px] font-black uppercase tracking-tight">{team.abbreviation}</span>
+                                                        <span className="text-[9px] md:text-[10px] font-varsity uppercase tracking-tight">{team.abbreviation}</span>
                                                         {activeContest.metric_key === 'wins' && (
-                                                          <span className="text-[7px] md:text-[8px] font-bold opacity-70 uppercase">{sel.side} {team.ou_line}</span>
+                                                          <span className="text-[7px] md:text-[8px] font-varsity opacity-70 uppercase">{sel.side} {team.ou_line}</span>
                                                         )}
                                                       </div>
-                                                      <span className="w-px h-3 bg-current opacity-20" />
+                                                      <span className="w-px h-3 bg-slate-200" />
                                                       <div className="flex flex-col items-end leading-none">
-                                                        <span className="text-[9px] md:text-[10px] font-bold tabular-nums">
+                                                        <span className="text-[9px] md:text-[10px] font-varsity tabular-nums">
                                                           {activeContest.metric_key === 'wins' ? `${team.stats.wins}-${team.stats.losses}` : metricValue}
                                                         </span>
                                                         {activeContest.use_chips && (
-                                                          <span className="text-[7px] md:text-[8px] font-bold opacity-70">{sel.chips}c</span>
+                                                          <span className="text-[7px] md:text-[8px] font-varsity opacity-70">{sel.chips}c</span>
                                                         )}
                                                       </div>
                                                     </div>
@@ -990,10 +987,10 @@ export default function Dashboard() {
                                             </div>
 
                                             <div className="hidden md:block col-span-2 text-right">
-                                              <div className="text-2xl font-black text-emerald-500 tabular-nums tracking-tighter">
+                                              <div className="text-2xl font-varsity text-blue-600 tabular-nums tracking-tighter">
                                                 {entry.score}
                                               </div>
-                                              <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                              <div className="text-[10px] font-varsity text-slate-500 uppercase tracking-widest">
                                                 {formatMetric(activeContest.metric_key)}
                                               </div>
                                             </div>
@@ -1027,30 +1024,30 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="flex items-center gap-3 mb-2">
-                      <Trophy className="text-amber-500" size={16} />
-                      <span className="text-[10px] font-black text-amber-500 uppercase tracking-[0.3em]">Live Standings</span>
+                      <Trophy className="text-[var(--color-stitch-red)]" size={16} />
+                      <span className="text-[10px] font-varsity text-slate-500 uppercase tracking-[0.3em]">League Standings</span>
                     </div>
-                    <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight">
-                      {activeContest?.theme_name.toUpperCase() || 'STANDINGS'}
+                    <h1 className="text-3xl md:text-5xl font-varsity text-slate-900 tracking-tighter uppercase leading-none">
+                      {activeContest?.theme_name || 'STANDINGS'}
                     </h1>
                   </div>
                   {activeContest && (
-                    <div className="hidden sm:flex px-4 py-2 bg-slate-900 rounded-xl border border-slate-800 items-center gap-3">
-                      <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{formatMetric(activeContest.metric_key)}</span>
+                    <div className="hidden sm:flex px-4 py-2 bg-white rounded-xl border-2 border-slate-200 items-center gap-3 shadow-sm">
+                      <span className="text-xs font-varsity text-slate-500 uppercase tracking-widest">{formatMetric(activeContest.metric_key)}</span>
                     </div>
                   )}
                 </div>
 
                 {/* Contest Selector */}
-                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2 border-b border-slate-800/50">
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2 border-b-2 border-slate-200">
                   {contests.filter(c => c.is_active).map(contest => (
                     <button
                       key={contest.id}
                       onClick={() => setActiveContest(contest)}
-                      className={`px-4 py-2 rounded-xl text-[10px] font-black whitespace-nowrap transition-all border uppercase tracking-widest ${
+                      className={`px-4 py-2 rounded-xl text-[10px] font-varsity whitespace-nowrap transition-all border-2 uppercase tracking-widest ${
                         activeContest?.id === contest.id
-                          ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.1)]'
-                          : 'bg-slate-900 border-slate-800 text-slate-500 hover:bg-slate-800 hover:text-slate-300'
+                          ? 'bg-slate-900 border-slate-900 text-white shadow-lg'
+                          : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300 hover:text-slate-600'
                       }`}
                     >
                       {contest.theme_name}
@@ -1061,23 +1058,23 @@ export default function Dashboard() {
                 {activeContest ? (
                   <div className="space-y-6">
                     <div className="flex items-center justify-between">
-                      <h2 className="text-xl font-black text-white flex items-center gap-3">
-                        <BarChart3 className="text-emerald-500" size={20} />
+                      <h2 className="text-xl font-varsity text-slate-900 flex items-center gap-3 uppercase tracking-tighter">
+                        <BarChart3 className="text-blue-600" size={20} />
                         FULL CONTEST STANDINGS
                       </h2>
-                      <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">
+                      <div className="text-[10px] font-varsity text-slate-500 uppercase tracking-[0.2em]">
                         {allEntries.length} Contestants
                       </div>
                     </div>
 
-                    <div className="bg-slate-900 rounded-[1.5rem] md:rounded-[2rem] border border-slate-800 overflow-hidden shadow-2xl">
-                      <div className="grid grid-cols-12 px-4 md:px-8 py-4 bg-slate-950/50 border-b border-slate-800 text-[8px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                    <div className="bg-white rounded-[1.5rem] md:rounded-[2rem] border-4 border-stitch overflow-hidden shadow-xl">
+                      <div className="grid grid-cols-12 px-4 md:px-8 py-4 bg-slate-50 border-b-2 border-slate-200 text-[8px] md:text-[10px] font-varsity text-slate-500 uppercase tracking-widest">
                         <div className="col-span-2 md:col-span-1">Rank</div>
                         <div className="col-span-6 md:col-span-3">Contestant</div>
                         <div className="hidden md:block col-span-6">Selections & Records</div>
                         <div className="col-span-4 md:col-span-2 text-right">Score</div>
                       </div>
-                      <div className="divide-y divide-slate-800/50">
+                      <div className="divide-y-2 divide-slate-100">
                         {sortedEntries.map((entry, idx) => {
                           const player = leaderboard.find(p => p.uid === entry.uid);
                           if (!player) return null;
@@ -1085,25 +1082,25 @@ export default function Dashboard() {
                           const rank = sortedEntries.findIndex(e => e.score === entry.score) + 1;
 
                           return (
-                            <div key={entry.uid} className="flex flex-col md:grid md:grid-cols-12 px-4 md:px-8 py-4 md:py-6 md:items-center hover:bg-slate-800/30 transition-colors group gap-4 md:gap-0">
+                            <div key={entry.uid} className="flex flex-col md:grid md:grid-cols-12 px-4 md:px-8 py-4 md:py-6 md:items-center hover:bg-slate-50 transition-colors group gap-4 md:gap-0">
                               <div className="flex items-center justify-between md:contents">
-                                <div className="col-span-2 md:col-span-1 font-mono text-slate-500 text-xs md:text-sm">{rank}</div>
+                                <div className="col-span-2 md:col-span-1 font-varsity text-slate-400 text-xs md:text-sm">{rank}</div>
                                 
                                 <div className="col-span-6 md:col-span-3 flex items-center gap-3 md:gap-4">
-                                  <div className="w-8 h-8 md:w-10 md:h-10 bg-slate-950 rounded-xl md:rounded-2xl flex items-center justify-center font-black text-emerald-500 border border-slate-800 group-hover:border-emerald-500/50 transition-colors shrink-0 text-xs md:text-base">
+                                  <div className="w-8 h-8 md:w-10 md:h-10 bg-white rounded-full flex items-center justify-center font-varsity text-[var(--color-stitch-red)] border-2 border-stitch group-hover:scale-110 transition-transform shrink-0 text-xs md:text-base shadow-sm">
                                     {player.display_name?.[0]}
                                   </div>
                                   <div className="flex flex-col min-w-0">
-                                    <span className="font-black text-white group-hover:text-emerald-500 transition-colors truncate text-xs md:text-base">{player.display_name}</span>
-                                    <span className="text-[8px] md:text-[10px] text-slate-500 uppercase tracking-widest font-bold truncate">{player.role}</span>
+                                    <span className="font-varsity text-slate-900 group-hover:text-[var(--color-stitch-red)] transition-colors truncate text-xs md:text-base uppercase tracking-tight">{player.display_name}</span>
+                                    <span className="text-[8px] md:text-[10px] text-slate-400 uppercase tracking-widest font-varsity truncate">{player.role}</span>
                                   </div>
                                 </div>
 
                                 <div className="md:hidden text-right">
-                                  <div className="text-lg font-black text-emerald-500 tabular-nums tracking-tighter">
+                                  <div className="text-lg font-varsity text-blue-600 tabular-nums tracking-tighter">
                                     {entry.score}
                                   </div>
-                                  <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest">
+                                  <div className="text-[8px] font-varsity text-slate-400 uppercase tracking-widest">
                                     {formatMetric(activeContest.metric_key)}
                                   </div>
                                 </div>
@@ -1122,14 +1119,14 @@ export default function Dashboard() {
                                     : false;
 
                                   return (
-                                    <div key={sel.team_id} className={`px-3 py-1.5 rounded-lg border flex items-center gap-2 transition-all ${isClinched ? 'bg-emerald-500/10 border-emerald-500/40' : isEliminated ? 'bg-rose-500/10 border-rose-500/40' : 'bg-slate-800/50 border-slate-700'}`}>
-                                      <span className="text-[10px] font-black text-white">{team.abbreviation}</span>
+                                    <div key={sel.team_id} className={`px-3 py-1.5 rounded-lg border-2 flex items-center gap-2 transition-all ${isClinched ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : isEliminated ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-white border-slate-100 text-slate-500'}`}>
+                                      <span className="text-[10px] font-varsity text-slate-900">{team.abbreviation}</span>
                                       {activeContest.metric_key === 'wins' && (
-                                        <span className={`text-[8px] font-bold uppercase ${isClinched ? 'text-emerald-400' : isEliminated ? 'text-rose-400' : 'text-slate-500'}`}>
+                                        <span className={`text-[8px] font-varsity uppercase ${isClinched ? 'text-emerald-600' : isEliminated ? 'text-rose-600' : 'text-slate-400'}`}>
                                           {sel.side[0]} {team.ou_line} {isClinched && '✓'} {isEliminated && '✗'}
                                         </span>
                                       )}
-                                      <span className="text-[8px] font-mono text-slate-500">
+                                      <span className="text-[8px] font-varsity text-slate-400">
                                         {activeContest.metric_key === 'wins' ? `${team.stats.wins}-${team.stats.losses}` : (parseDate(activeContest.start_time) <= new Date() ? Math.max(0, (team.stats[activeContest.metric_key as keyof typeof team.stats] || 0) - (activeContest.starting_stats?.[team.id] || 0)) : 0)}
                                       </span>
                                     </div>
@@ -1138,10 +1135,10 @@ export default function Dashboard() {
                               </div>
 
                               <div className="hidden md:block col-span-2 text-right">
-                                <div className="text-2xl font-black text-emerald-500 tabular-nums tracking-tight">
+                                <div className="text-2xl font-varsity text-blue-600 tabular-nums tracking-tighter">
                                   {entry.score}
                                 </div>
-                                <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                <div className="text-[10px] font-varsity text-slate-400 uppercase tracking-widest">
                                   {formatMetric(activeContest.metric_key)}
                                 </div>
                               </div>
@@ -1152,10 +1149,10 @@ export default function Dashboard() {
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-slate-900 p-12 rounded-[2rem] border border-dashed border-slate-800 text-center">
-                    <Trophy className="mx-auto text-slate-700 mb-4" size={48} />
-                    <h3 className="text-xl font-black text-white mb-2">No Active Contest</h3>
-                    <p className="text-slate-500">Select a contest to view its standings.</p>
+                  <div className="bg-white p-12 rounded-[2rem] border-4 border-dashed border-slate-200 text-center">
+                    <Trophy className="mx-auto text-slate-300 mb-4" size={48} />
+                    <h3 className="text-xl font-varsity text-slate-900 mb-2 uppercase tracking-tight">No Active Contest</h3>
+                    <p className="text-slate-500 font-scorebook">Select a contest to view its standings.</p>
                   </div>
                 )}
               </div>
@@ -1197,26 +1194,26 @@ export default function Dashboard() {
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
-                className="w-full max-w-2xl bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl overflow-hidden"
+                className="w-full max-w-2xl bg-white rounded-3xl border-4 border-stitch shadow-2xl overflow-hidden"
               >
-                <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+                <div className="p-6 border-b-2 border-slate-200 flex justify-between items-center bg-slate-50">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-emerald-600 rounded-full flex items-center justify-center font-bold text-xl">
+                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center font-varsity text-xl text-[var(--color-stitch-red)] border-2 border-stitch shrink-0 shadow-inner">
                       {selectedRival.user.display_name?.[0]}
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold">{selectedRival.user.display_name}'s Slip</h3>
-                      <p className="text-xs text-slate-500 uppercase tracking-widest">Locked Entry</p>
+                      <h3 className="text-xl font-varsity text-slate-900 uppercase tracking-tight">{selectedRival.user.display_name}'s Slip</h3>
+                      <p className="text-xs text-slate-500 uppercase tracking-widest font-varsity">Locked Entry</p>
                     </div>
                   </div>
                   <button 
                     onClick={() => setSelectedRival(null)}
-                    className="p-2 hover:bg-slate-800 rounded-full text-slate-400"
+                    className="p-2 hover:bg-slate-200 rounded-full text-slate-400 transition-colors"
                   >
                     ✕
                   </button>
                 </div>
-                <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+                <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto bg-scorebook">
                   {[...selectedRival.entry.selections].sort((a, b) => b.chips - a.chips).map(sel => {
                     const team = teams.find(t => t.id === sel.team_id);
                     if (!team) return null;
@@ -1227,15 +1224,15 @@ export default function Dashboard() {
                       const isStarted = parseDate(activeContest.start_time) <= new Date();
                       const metricValue = isStarted ? Math.max(0, rawValue - startValue) : 0;
                       return (
-                        <div key={sel.team_id} className="flex justify-between items-center p-4 bg-slate-950 rounded-xl border border-slate-800">
+                        <div key={sel.team_id} className="flex justify-between items-center p-4 bg-white rounded-xl border-2 border-slate-100 shadow-sm">
                           <div>
-                            <div className="font-bold">{team.team_name}</div>
-                            <div className="text-[10px] text-slate-500 uppercase tracking-widest">
+                            <div className="font-varsity text-slate-900 uppercase tracking-tight">{team.team_name}</div>
+                            <div className="text-[10px] text-slate-500 uppercase tracking-widest font-varsity">
                               {activeContest.is_draft ? 'Draft Pick' : 'Selection'}
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="font-black text-emerald-500">{metricValue} {formatMetric(activeContest.metric_key)}</div>
+                            <div className="font-varsity text-blue-600 uppercase tracking-tight">{metricValue} {formatMetric(activeContest.metric_key)}</div>
                           </div>
                         </div>
                       );
@@ -1250,17 +1247,17 @@ export default function Dashboard() {
                       : team.stats.wins > team.ou_line;
 
                     return (
-                      <div key={sel.team_id} className="flex justify-between items-center p-4 bg-slate-950 rounded-xl border border-slate-800">
+                      <div key={sel.team_id} className="flex justify-between items-center p-4 bg-white rounded-xl border-2 border-slate-100 shadow-sm">
                         <div>
-                          <div className="font-bold">{team.team_name}</div>
-                          <div className="text-[10px] text-slate-500 uppercase tracking-widest">
+                          <div className="font-varsity text-slate-900 uppercase tracking-tight">{team.team_name}</div>
+                          <div className="text-[10px] text-slate-500 uppercase tracking-widest font-varsity">
                             {sel.side} {team.ou_line} • {sel.chips} Chips 
-                            {isClinched && <span className="text-emerald-500 ml-2">CLINCHED</span>}
-                            {isEliminated && <span className="text-rose-500 ml-2">ELIMINATED</span>}
+                            {isClinched && <span className="text-emerald-600 ml-2">CLINCHED</span>}
+                            {isEliminated && <span className="text-rose-600 ml-2">ELIMINATED</span>}
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className={`font-black ${isClinched ? 'text-emerald-500' : isEliminated ? 'text-rose-500' : 'text-slate-400'}`}>{team.stats.wins}W</div>
+                          <div className={`font-varsity uppercase tracking-tight ${isClinched ? 'text-emerald-600' : isEliminated ? 'text-rose-600' : 'text-slate-400'}`}>{team.stats.wins}W</div>
                         </div>
                       </div>
                     );

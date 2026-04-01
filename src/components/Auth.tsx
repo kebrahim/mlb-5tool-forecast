@@ -42,44 +42,55 @@ export default function Auth() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-100 p-4">
-      <div className="w-full max-w-md bg-slate-900 p-6 md:p-8 rounded-2xl border border-slate-800 shadow-2xl">
-        <h1 className="text-2xl md:text-3xl font-bold mb-8 text-center bg-gradient-to-r from-emerald-400 to-emerald-600 bg-clip-text text-transparent">
-          MLB 5-TOOL FORECAST
-        </h1>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-field p-4 relative overflow-hidden">
+      {/* Decorative Stitches */}
+      <div className="absolute -top-20 -left-20 w-64 h-64 border-8 border-dashed border-[var(--color-stitch-red)] rounded-full opacity-20" />
+      <div className="absolute -bottom-20 -right-20 w-64 h-64 border-8 border-dashed border-[var(--color-stitch-red)] rounded-full opacity-20" />
+      
+      <div className="w-full max-w-md bg-white p-6 md:p-8 rounded-2xl border-4 border-stitch shadow-2xl relative z-10">
+        <div className="mb-8 text-center">
+          <h1 className="text-3xl md:text-4xl font-varsity text-slate-900 uppercase tracking-tighter leading-none">
+            MLB 5-TOOL <br/>
+            <span className="text-[var(--color-stitch-red)]">FORECAST</span>
+          </h1>
+          <div className="mt-2 h-1 w-24 bg-[var(--color-stitch-red)] mx-auto rounded-full" />
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {!isLogin && (
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-2">Display Name</label>
+              <label className="block text-xs font-varsity text-slate-500 mb-1 uppercase tracking-widest">Player Name</label>
               <input
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-emerald-500 transition-colors"
+                className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-[var(--color-stitch-red)] transition-colors font-scorebook"
+                placeholder="ROOKIE NAME"
                 required
               />
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-slate-400 mb-2">Email</label>
+            <label className="block text-xs font-varsity text-slate-500 mb-1 uppercase tracking-widest">Email Address</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-emerald-500 transition-colors"
+              className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-[var(--color-stitch-red)] transition-colors font-scorebook"
+              placeholder="PLAYER@BALLPARK.COM"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-400 mb-2">Password</label>
+            <label className="block text-xs font-varsity text-slate-500 mb-1 uppercase tracking-widest">Secret Code</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-emerald-500 transition-colors"
+              className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-[var(--color-stitch-red)] transition-colors font-scorebook"
+              placeholder="••••••••"
               required
             />
           </div>
@@ -87,21 +98,23 @@ export default function Auth() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2"
+            className="w-full py-4 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-varsity uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg active:transform active:scale-95"
           >
-            {loading ? 'Processing...' : isLogin ? <><LogIn size={20} /> Login</> : <><UserPlus size={20} /> Sign Up</>}
+            {loading ? 'WARMING UP...' : isLogin ? <><LogIn size={20} /> STEP TO THE PLATE</> : <><UserPlus size={20} /> SIGN THE CONTRACT</>}
           </button>
         </form>
 
-        <div className="mt-6 text-center">
+        <div className="mt-8 text-center border-t-2 border-slate-100 pt-6">
           <button
             onClick={() => setIsLogin(!isLogin)}
-            className="text-emerald-500 hover:text-emerald-400 text-sm font-medium transition-colors"
+            className="text-[var(--color-stitch-red)] hover:text-red-700 text-xs font-varsity uppercase tracking-widest transition-colors"
           >
-            {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Login"}
+            {isLogin ? "Need a roster spot? Sign Up" : "Already on the team? Login"}
           </button>
         </div>
       </div>
+      
+      <p className="mt-8 text-white/60 font-varsity text-[10px] uppercase tracking-[0.3em]">Official Forecast System v2026</p>
     </div>
   );
 }

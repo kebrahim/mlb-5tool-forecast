@@ -619,50 +619,50 @@ export default function Admin() {
   };
 
   return (
-    <div className="p-4 md:p-8 bg-slate-900 rounded-2xl border border-slate-800 shadow-xl">
+    <div className="p-4 md:p-8 bg-white rounded-2xl border-4 border-stitch shadow-xl">
       <div className="flex items-center gap-3 mb-6">
-        <ShieldCheck className="text-emerald-500 md:w-[32px] md:h-[32px]" size={28} />
-        <h2 className="text-xl md:text-2xl font-bold">Admin Controls</h2>
+        <ShieldCheck className="text-blue-600 md:w-[32px] md:h-[32px]" size={28} />
+        <h2 className="text-xl md:text-2xl font-varsity text-slate-900 uppercase tracking-tight">Admin Controls</h2>
       </div>
 
-      <p className="text-sm text-slate-400 mb-8">
+      <p className="text-sm font-varsity text-slate-500 mb-8 uppercase tracking-widest opacity-70">
         Use these tools to initialize the database with MLB teams, O/U lines, and the initial 2026 season contest.
       </p>
 
-      <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl mb-8 flex items-start gap-3">
-        <Clock className="text-blue-500 shrink-0 mt-0.5" size={18} />
-        <div className="text-xs text-blue-200 leading-relaxed">
-          <span className="font-bold text-blue-500 uppercase">Note:</span> MLB stats sync is currently in <span className="font-black">MANUAL MODE</span>. Click the sync button below to update real-time standings from your browser.
+      <div className="bg-blue-50 border-2 border-blue-200 p-4 rounded-xl mb-8 flex items-start gap-3">
+        <Clock className="text-blue-600 shrink-0 mt-0.5" size={18} />
+        <div className="text-[10px] font-varsity text-blue-800 leading-relaxed uppercase tracking-widest">
+          <span className="font-bold text-blue-600">Note:</span> MLB stats sync is currently in <span className="font-black">MANUAL MODE</span>. Click the sync button below to update real-time standings from your browser.
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
-        <div className="p-4 md:p-6 bg-slate-950 rounded-2xl border border-slate-800">
+        <div className="p-4 md:p-6 bg-slate-50 rounded-2xl border-2 border-slate-200">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <RefreshCw className={`${syncing ? 'text-blue-500 animate-spin' : 'text-slate-500'} md:w-[24px] md:h-[24px]`} size={20} />
+              <RefreshCw className={`${syncing ? 'text-blue-600 animate-spin' : 'text-slate-400'} md:w-[24px] md:h-[24px]`} size={20} />
               <div>
-                <h3 className="font-bold text-sm">MLB Stats Sync</h3>
-                <p className="text-[10px] text-slate-500 uppercase tracking-widest">Manual Trigger</p>
+                <h3 className="font-varsity text-sm text-slate-900 uppercase tracking-tight">MLB Stats Sync</h3>
+                <p className="text-[10px] font-varsity text-slate-400 uppercase tracking-widest">Manual Trigger</p>
               </div>
             </div>
             <button
               onClick={handleToggleSync}
-              className={`px-3 py-1 rounded-full text-[10px] font-black transition-all border ${
+              className={`px-3 py-1 rounded-full text-[10px] font-varsity uppercase tracking-widest transition-all border-2 ${
                 syncEnabled 
-                  ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-500' 
-                  : 'bg-slate-800 border-slate-700 text-slate-500'
+                  ? 'bg-emerald-50 border-emerald-500 text-emerald-600' 
+                  : 'bg-slate-200 border-slate-300 text-slate-500'
               }`}
             >
               {syncEnabled ? 'ENABLED' : 'DISABLED'}
             </button>
           </div>
-          <p className="text-xs text-slate-400 leading-relaxed mb-4">
+          <p className="text-[10px] font-varsity text-slate-500 leading-relaxed mb-4 uppercase tracking-widest opacity-70">
             Trigger a manual sync of real-time MLB standings, home runs, and strikeouts directly from your browser.
           </p>
-          <div className="flex items-center gap-2 text-[10px] font-mono mb-4">
-            <span className="w-2 h-2 rounded-full bg-blue-500" />
-            <span className="text-blue-500">
+          <div className="flex items-center gap-2 text-[10px] font-varsity mb-4 uppercase tracking-widest">
+            <span className="w-2 h-2 rounded-full bg-blue-600" />
+            <span className="text-blue-600">
               MODE: MANUAL (BROWSER-BASED)
             </span>
           </div>
@@ -670,7 +670,7 @@ export default function Admin() {
             <button
               onClick={testMlbApi}
               disabled={syncing}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-[10px] font-bold rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-700"
+              className="px-4 py-2 bg-white hover:bg-slate-50 disabled:opacity-50 text-slate-900 text-[10px] font-varsity uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2 border-2 border-slate-200 shadow-sm"
             >
               <Search size={14} />
               Verify MLB API
@@ -678,51 +678,51 @@ export default function Admin() {
             <button
               onClick={handleManualSync}
               disabled={syncing}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-[10px] font-bold rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-700"
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-[10px] font-varsity uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2 shadow-md"
             >
               <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
-              {syncing ? 'Syncing...' : 'Sync Now (Manual Test)'}
+              {syncing ? 'Syncing...' : 'Sync Now'}
             </button>
           </div>
         </div>
 
-        <div className="p-4 md:p-6 bg-slate-950 rounded-2xl border border-slate-800">
+        <div className="p-4 md:p-6 bg-slate-50 rounded-2xl border-2 border-slate-200">
           <div className="flex items-center gap-3 mb-4">
-            <Database className="text-blue-500 md:w-[24px] md:h-[24px]" size={20} />
+            <Database className="text-blue-600 md:w-[24px] md:h-[24px]" size={20} />
             <div>
-              <h3 className="font-bold text-sm">Data Seeding</h3>
-              <p className="text-[10px] text-slate-500 uppercase tracking-widest">Initial Setup</p>
+              <h3 className="font-varsity text-sm text-slate-900 uppercase tracking-tight">Data Seeding</h3>
+              <p className="text-[10px] font-varsity text-slate-400 uppercase tracking-widest">Initial Setup</p>
             </div>
           </div>
-          <p className="text-xs text-slate-400 leading-relaxed mb-6">
+          <p className="text-[10px] font-varsity text-slate-500 leading-relaxed mb-6 uppercase tracking-widest opacity-70">
             Reset teams, lines, and contests. Use this for initial setup or season resets.
           </p>
           <button
             onClick={seedData}
             disabled={loading}
-            className="w-full px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2"
+            className="w-full px-4 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-900 text-[10px] font-varsity uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2 border-2 border-slate-200"
           >
             <Database size={16} />
             {loading ? 'Seeding...' : 'Seed Initial Data'}
           </button>
         </div>
 
-        <div className="p-4 md:p-6 bg-slate-950 rounded-2xl border border-slate-800">
+        <div className="p-4 md:p-6 bg-slate-50 rounded-2xl border-2 border-slate-200">
           <div className="flex items-center gap-3 mb-4">
-            <Trash2 className="text-rose-500 md:w-[24px] md:h-[24px]" size={20} />
+            <Trash2 className="text-rose-600 md:w-[24px] md:h-[24px]" size={20} />
             <div>
-              <h3 className="font-bold text-sm">Clear Test Data</h3>
-              <p className="text-[10px] text-slate-500 uppercase tracking-widest">Danger Zone</p>
+              <h3 className="font-varsity text-sm text-slate-900 uppercase tracking-tight">Clear Test Data</h3>
+              <p className="text-[10px] font-varsity text-slate-400 uppercase tracking-widest">Danger Zone</p>
             </div>
           </div>
-          <p className="text-xs text-slate-400 leading-relaxed mb-6">
+          <p className="text-[10px] font-varsity text-slate-500 leading-relaxed mb-6 uppercase tracking-widest opacity-70">
             Delete all user picks and entries across all contests. This will also reset draft progress.
           </p>
           
           {!showDeleteConfirm ? (
             <button
               onClick={() => setShowDeleteConfirm(true)}
-              className="w-full px-4 py-2 bg-rose-900/20 hover:bg-rose-900/40 border border-rose-500/30 text-rose-500 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2"
+              className="w-full px-4 py-2 bg-rose-50 hover:bg-rose-100 border-2 border-rose-200 text-rose-600 text-[10px] font-varsity uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2"
             >
               <Trash2 size={16} />
               Delete All Picks
@@ -732,14 +732,14 @@ export default function Admin() {
               <button
                 onClick={deleteAllEntries}
                 disabled={loading}
-                className="w-full px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2"
+                className="w-full px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-[10px] font-varsity uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2 shadow-md"
               >
                 {loading ? 'Deleting...' : 'CONFIRM DELETE ALL'}
               </button>
               <button
                 onClick={() => setShowDeleteConfirm(false)}
                 disabled={loading}
-                className="w-full px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-400 text-xs font-bold rounded-xl transition-all"
+                className="w-full px-4 py-2 bg-slate-200 hover:bg-slate-300 disabled:opacity-50 text-slate-600 text-[10px] font-varsity uppercase tracking-widest rounded-xl transition-all"
               >
                 Cancel
               </button>
@@ -749,25 +749,25 @@ export default function Admin() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 mb-8">
-        <div className="p-4 md:p-6 bg-slate-950 rounded-2xl border border-slate-800">
+        <div className="p-4 md:p-6 bg-slate-50 rounded-2xl border-2 border-slate-200">
           <div className="flex items-center gap-3 mb-6">
-            <ListOrdered className="text-emerald-500 md:w-[24px] md:h-[24px]" size={20} />
+            <ListOrdered className="text-emerald-600 md:w-[24px] md:h-[24px]" size={20} />
             <div>
-              <h3 className="font-bold text-sm">MLB Win Totals Management</h3>
-              <p className="text-[10px] text-slate-500 uppercase tracking-widest">Adjust Over/Under Lines</p>
+              <h3 className="font-varsity text-sm text-slate-900 uppercase tracking-tight">MLB Win Totals Management</h3>
+              <p className="text-[10px] font-varsity text-slate-400 uppercase tracking-widest">Adjust Over/Under Lines</p>
             </div>
           </div>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[500px] overflow-y-auto pr-2 no-scrollbar">
             {teamLines.map(team => (
-              <div key={team.id} className="p-3 bg-slate-900 rounded-xl border border-slate-800 flex items-center justify-between group">
+              <div key={team.id} className="p-3 bg-white rounded-xl border-2 border-slate-100 flex items-center justify-between group shadow-sm">
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-bold flex items-center gap-2 truncate">
-                    <span className="text-slate-500 w-8 shrink-0">{team.abbreviation}</span>
+                  <div className="text-xs font-varsity text-slate-900 flex items-center gap-2 truncate uppercase tracking-tight">
+                    <span className="text-slate-400 w-8 shrink-0">{team.abbreviation}</span>
                     <span className="truncate">{team.team_name}</span>
                   </div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">
-                    Current Line: <span className="text-emerald-500 font-mono">{team.ou_line}</span>
+                  <div className="text-[9px] font-varsity text-slate-400 mt-0.5 uppercase tracking-widest">
+                    Current Line: <span className="text-emerald-600">{team.ou_line}</span>
                   </div>
                 </div>
 
@@ -778,7 +778,7 @@ export default function Admin() {
                       step="0.5"
                       value={editLineValue}
                       onChange={(e) => setEditLineValue(e.target.value)}
-                      className="w-16 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs font-mono text-emerald-500"
+                      className="w-16 bg-slate-50 border-2 border-slate-200 rounded px-2 py-1 text-xs font-varsity text-blue-600"
                       autoFocus
                     />
                     <button
@@ -790,7 +790,7 @@ export default function Admin() {
                     </button>
                     <button
                       onClick={() => setEditingTeamId(null)}
-                      className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-lg transition-all"
+                      className="p-1.5 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg transition-all"
                     >
                       <Power size={12} />
                     </button>

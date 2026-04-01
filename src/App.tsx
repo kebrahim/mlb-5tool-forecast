@@ -23,18 +23,18 @@ class ErrorBoundary extends (React.Component as any) {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-rose-500/50 p-8 rounded-2xl max-w-lg w-full">
-            <h2 className="text-2xl font-bold text-rose-500 mb-4">Something went wrong</h2>
-            <p className="text-slate-400 mb-6">
+        <div className="min-h-screen bg-[var(--color-leather-white)] flex items-center justify-center p-4">
+          <div className="bg-white border-2 border-stitch p-8 rounded-2xl max-w-lg w-full shadow-xl">
+            <h2 className="text-2xl font-varsity text-[var(--color-stitch-red)] mb-4 uppercase tracking-wider">Something went wrong</h2>
+            <p className="text-slate-600 mb-6 font-scorebook">
               The application encountered an error. If this is a permission issue, the details have been logged to the console.
             </p>
-            <pre className="bg-slate-950 p-4 rounded-xl text-xs text-rose-400 overflow-auto max-h-40 mb-6">
+            <pre className="bg-slate-100 p-4 rounded-xl text-xs text-slate-800 overflow-auto max-h-40 mb-6 border border-slate-200">
               {this.state.error?.message || "Unknown error"}
             </pre>
             <button
               onClick={() => window.location.reload()}
-              className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-colors"
+              className="w-full py-3 bg-field hover:bg-emerald-800 text-white font-varsity uppercase tracking-widest rounded-xl transition-colors shadow-lg"
             >
               Reload Application
             </button>
@@ -73,8 +73,14 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="w-16 h-16 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-[var(--color-leather-white)] flex flex-col items-center justify-center">
+        <div className="relative w-24 h-24">
+          <div className="absolute inset-0 border-4 border-[var(--color-stitch-red)] border-dashed rounded-full animate-spin-slow" />
+          <div className="absolute inset-2 bg-white rounded-full flex items-center justify-center shadow-inner">
+            <span className="text-3xl">⚾</span>
+          </div>
+        </div>
+        <p className="mt-4 font-varsity text-slate-600 uppercase tracking-widest animate-pulse">Loading Ballpark...</p>
       </div>
     );
   }
@@ -83,9 +89,12 @@ export default function App() {
     <ErrorBoundary>
       <Toaster position="top-right" toastOptions={{
         style: {
-          background: '#0f172a',
-          color: '#f8fafc',
-          border: '1px solid #1e293b',
+          background: '#fff',
+          color: '#1e293b',
+          border: '2px dashed var(--color-stitch-red)',
+          fontFamily: 'var(--font-varsity)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
         },
       }} />
       {user ? <Dashboard /> : <Auth />}

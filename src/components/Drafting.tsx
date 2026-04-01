@@ -88,15 +88,15 @@ function SnakeDraftRoom({
     <div className="space-y-8">
       {/* Draft Board - Organized by Contestant */}
       {contest.draft_order && contest.draft_order.length > 0 && (
-        <div className="bg-slate-950/50 rounded-3xl border border-slate-800/50 p-6 overflow-hidden">
+        <div className="bg-white rounded-3xl border-4 border-stitch p-6 overflow-hidden shadow-xl">
           <div className="flex items-center justify-between mb-6">
-            <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] flex items-center gap-2">
+            <div className="text-[10px] font-varsity text-slate-500 uppercase tracking-[0.2em] flex items-center gap-2">
               <ListOrdered size={14} />
               Draft Board • {allSelections.length} Total Picks {contest.draft_status === 'completed' && '• COMPLETED'}
             </div>
             <button 
               onClick={() => setIsBoardExpanded(!isBoardExpanded)}
-              className="p-2 hover:bg-slate-800 rounded-xl transition-colors text-slate-500"
+              className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-500"
             >
               {isBoardExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </button>
@@ -119,15 +119,15 @@ function SnakeDraftRoom({
                     return (
                       <div key={uid} className="flex-1 min-w-[180px] space-y-4">
                         {/* Player Header */}
-                        <div className="flex items-center gap-3 pb-4 border-b border-slate-800/50">
-                          <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-[10px] font-black text-slate-400 border border-slate-700">
+                        <div className="flex items-center gap-3 pb-4 border-b-2 border-slate-100">
+                          <div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-[10px] font-varsity text-white border-2 border-slate-700">
                             {playerIdx + 1}
                           </div>
                           <div className="flex flex-col">
-                            <span className="text-xs font-black text-white truncate max-w-[140px]">
+                            <span className="text-xs font-varsity text-slate-900 truncate max-w-[140px] uppercase tracking-tight">
                               {user?.display_name || 'Unknown'}
                             </span>
-                            <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">
+                            <span className="text-[8px] font-varsity text-slate-400 uppercase tracking-widest">
                               Contestant
                             </span>
                           </div>
@@ -143,16 +143,16 @@ function SnakeDraftRoom({
                                   initial={{ opacity: 0, x: -10 }}
                                   animate={{ opacity: 1, x: 0 }}
                                   key={sel.teamId}
-                                  className="flex items-center gap-3 bg-slate-900/80 border border-slate-800/50 p-2 rounded-xl"
+                                  className="flex items-center gap-3 bg-slate-50 border-2 border-slate-100 p-2 rounded-xl"
                                 >
-                                  <div className="w-6 h-6 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center text-[9px] font-black border border-emerald-500/20 shrink-0">
+                                  <div className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center text-[9px] font-varsity border border-blue-700 shrink-0">
                                     #{sel.pickNumber + 1}
                                   </div>
                                   <div className="flex flex-col min-w-0">
-                                    <span className="text-[10px] font-bold text-slate-200 truncate leading-tight">
+                                    <span className="text-[10px] font-varsity text-slate-900 truncate leading-tight uppercase tracking-tight">
                                       {team?.team_name}
                                     </span>
-                                    <span className="text-[8px] font-medium text-slate-500 uppercase">
+                                    <span className="text-[8px] font-varsity text-slate-400 uppercase tracking-widest">
                                       {team?.abbreviation}
                                     </span>
                                   </div>
@@ -160,8 +160,8 @@ function SnakeDraftRoom({
                               );
                             })
                           ) : (
-                            <div className="h-12 rounded-xl border border-dashed border-slate-800 flex items-center justify-center">
-                              <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">No Picks</span>
+                            <div className="h-12 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center">
+                              <span className="text-[9px] font-varsity text-slate-300 uppercase tracking-widest">No Picks</span>
                             </div>
                           )}
                         </div>
@@ -176,24 +176,24 @@ function SnakeDraftRoom({
       )}
 
       {/* Draft Status Bar - Sticky */}
-      <div className="sticky top-[80px] z-30 -mx-4 px-4 py-2 md:py-4 bg-slate-950/95 backdrop-blur-md border-b border-slate-800/50 shadow-2xl">
-        <div className={`p-4 md:p-6 rounded-2xl md:rounded-3xl border transition-all flex flex-col md:flex-row justify-between items-center gap-4 md:gap-6 ${
-          contest.draft_status === 'completed' ? 'bg-emerald-500/10 border-emerald-500/50' : 'bg-slate-900 border-slate-800'
+      <div className="sticky top-[80px] z-30 -mx-4 px-4 py-2 md:py-4 bg-white/95 backdrop-blur-md border-b-2 border-slate-200 shadow-xl">
+        <div className={`p-4 md:p-6 rounded-2xl md:rounded-3xl border-4 transition-all flex flex-col md:flex-row justify-between items-center gap-4 md:gap-6 ${
+          contest.draft_status === 'completed' ? 'bg-emerald-50 border-emerald-500/50' : 'bg-slate-900 border-slate-800'
         }`}>
           <div className="flex items-center gap-4 md:gap-6 w-full md:w-auto">
             <div className={`w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-2xl flex items-center justify-center shrink-0 ${
-              contest.draft_status === 'completed' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-amber-500/10 text-amber-500'
+              contest.draft_status === 'completed' ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-slate-900'
             }`}>
               {contest.draft_status === 'completed' ? <CheckCircle2 size={24} className="md:w-8 md:h-8" /> : <Clock size={24} className={`md:w-8 md:h-8 ${contest.draft_status === 'in_progress' ? 'animate-pulse' : ''}`} />}
             </div>
             <div>
-              <div className={`text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] mb-0.5 md:mb-1 ${
-                contest.draft_status === 'completed' ? 'text-emerald-500' : 'text-amber-500'
+              <div className={`text-[8px] md:text-[10px] font-varsity uppercase tracking-[0.2em] mb-0.5 md:mb-1 ${
+                contest.draft_status === 'completed' ? 'text-emerald-600' : 'text-amber-500'
               }`}>
                 {contest.draft_status === 'completed' ? 'DRAFT FINALIZED' : `Round ${round + 1} • ${contest.draft_status?.replace('_', ' ').toUpperCase()}`}
               </div>
               <div className="flex items-center gap-2 md:gap-3">
-                <h3 className="text-lg md:text-2xl font-black text-white leading-tight">
+                <h3 className="text-lg md:text-2xl font-varsity text-white leading-tight uppercase tracking-tighter">
                   {contest.draft_status === 'completed' ? 'DRAFT COMPLETED' : 
                    isMyTurn ? 'YOUR TURN TO PICK' : 
                    `${users.find(u => u.uid === activePlayerUid)?.display_name?.split(' ')[0] || 'Waiting'}'s Turn`}
@@ -209,14 +209,14 @@ function SnakeDraftRoom({
               return (
                 <div 
                   key={uid} 
-                  className={`flex flex-col items-center gap-1 md:gap-2 px-3 md:px-4 py-1.5 md:py-2 rounded-xl md:rounded-2xl border transition-all shrink-0 ${
-                    isCurrent ? 'bg-amber-500 border-amber-400 text-slate-950 scale-105 shadow-lg shadow-amber-500/20' : 'bg-slate-900 border-slate-800 text-slate-500'
+                  className={`flex flex-col items-center gap-1 md:gap-2 px-3 md:px-4 py-1.5 md:py-2 rounded-xl md:rounded-2xl border-2 transition-all shrink-0 ${
+                    isCurrent ? 'bg-amber-500 border-amber-400 text-slate-950 scale-105 shadow-lg' : 'bg-slate-800 border-slate-700 text-slate-500'
                   }`}
                 >
-                  <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-slate-800 flex items-center justify-center text-[10px] md:text-xs font-black border border-white/10 shrink-0">
+                  <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-slate-700 flex items-center justify-center text-[10px] md:text-xs font-varsity border border-white/10 shrink-0 text-white">
                     {user?.display_name?.[0]}
                   </div>
-                  <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest truncate max-w-[50px] md:max-w-[60px]">
+                  <span className="text-[8px] md:text-[10px] font-varsity uppercase tracking-widest truncate max-w-[50px] md:max-w-[60px]">
                     {user?.display_name?.split(' ')[0]}
                   </span>
                 </div>
@@ -236,27 +236,27 @@ function SnakeDraftRoom({
           return (
             <div 
               key={team.id}
-              className={`p-6 rounded-3xl border transition-all ${
-                isSelected ? 'bg-emerald-500/10 border-emerald-500 shadow-lg shadow-emerald-500/10' : 
-                isTaken ? 'bg-slate-950 border-slate-900 opacity-40 grayscale' :
-                'bg-slate-900 border-slate-800 hover:border-amber-500/50 group'
+              className={`p-6 rounded-3xl border-4 transition-all ${
+                isSelected ? 'bg-emerald-50 border-emerald-500 shadow-lg' : 
+                isTaken ? 'bg-slate-50 border-slate-200 opacity-40 grayscale' :
+                'bg-white border-slate-200 hover:border-blue-400 group'
               }`}
             >
               <div className="flex justify-between items-start mb-6">
                 <div>
-                  <h3 className="font-black text-xl text-white group-hover:text-amber-500 transition-colors">{team.team_name}</h3>
-                  <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mt-1">
+                  <h3 className="font-varsity text-xl text-slate-900 group-hover:text-blue-600 transition-colors uppercase tracking-tight">{team.team_name}</h3>
+                  <div className="text-[10px] font-varsity text-slate-400 uppercase tracking-[0.2em] mt-1">
                     {team.abbreviation}
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-2">
                   {isSelected && <CheckCircle2 className="text-emerald-500" size={24} />}
-                  {isTaken && <div className="text-[10px] font-black text-rose-500 bg-rose-500/10 px-2 py-1 rounded-lg border border-rose-500/20 uppercase tracking-widest">Taken</div>}
-                  <div className="bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 shadow-inner text-right">
-                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest block leading-none mb-1">
+                  {isTaken && <div className="text-[10px] font-varsity text-rose-600 bg-rose-50 px-2 py-1 rounded-lg border-2 border-rose-200 uppercase tracking-widest">Taken</div>}
+                  <div className="bg-slate-50 px-3 py-1.5 rounded-xl border-2 border-slate-200 shadow-inner text-right">
+                    <span className="text-[8px] font-varsity text-slate-400 uppercase tracking-widest block leading-none mb-1">
                       {contest.metric_key === 'wins' ? 'O/U Line' : `${formatMetric(contest.metric_key)} Sprint`}
                     </span>
-                    <span className="text-lg font-black text-amber-500 leading-none">
+                    <span className="text-lg font-varsity text-blue-600 leading-none">
                       {contest.metric_key === 'wins' ? team.ou_line : (parseDate(contest.start_time) <= new Date() ? Math.max(0, (team.stats[contest.metric_key as keyof typeof team.stats] || 0) - (contest.starting_stats?.[team.id] || 0)) : 0)}
                     </span>
                   </div>
@@ -266,14 +266,14 @@ function SnakeDraftRoom({
               <button
                 onClick={() => onDraft(team.id)}
                 disabled={isTaken || isSelected || !isMyTurn || isLocked}
-                className={`w-full py-4 rounded-2xl text-sm font-black transition-all flex items-center justify-center gap-3 ${
+                className={`w-full py-4 rounded-2xl text-sm font-varsity uppercase tracking-widest transition-all flex items-center justify-center gap-3 ${
                   isSelected 
                     ? 'bg-emerald-600 text-white cursor-default' 
                     : isTaken 
-                      ? 'bg-slate-950 text-slate-800 cursor-not-allowed'
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                       : isMyTurn
-                        ? 'bg-amber-500 text-slate-950 hover:bg-amber-400 shadow-lg shadow-amber-500/20 active:scale-95'
-                        : 'bg-slate-950 text-slate-600 cursor-not-allowed'
+                        ? 'bg-slate-900 text-white hover:bg-slate-800 shadow-lg active:scale-95'
+                        : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                 }`}
               >
                 {isSelected ? (
@@ -334,17 +334,17 @@ function SelectionRoom({
   return (
     <div className="space-y-8">
       {/* Selection Status Bar - Sticky */}
-      <div className="sticky top-[80px] z-30 -mx-4 px-4 py-2 md:py-4 bg-slate-950/95 backdrop-blur-md border-b border-slate-800/50 shadow-2xl">
-        <div className="bg-slate-950 p-4 md:p-6 rounded-2xl md:rounded-3xl border border-slate-800 shadow-xl flex flex-col md:flex-row justify-between items-center gap-4 md:gap-6">
+      <div className="sticky top-[80px] z-30 -mx-4 px-4 py-2 md:py-4 bg-white/95 backdrop-blur-md border-b-2 border-slate-200 shadow-xl">
+        <div className="bg-slate-900 p-4 md:p-6 rounded-2xl md:rounded-3xl border-4 border-slate-800 shadow-xl flex flex-col md:flex-row justify-between items-center gap-4 md:gap-6">
           <div className="flex items-center gap-4 md:gap-6 w-full md:w-auto">
             <div className="w-12 h-12 md:w-16 md:h-16 bg-emerald-500/10 rounded-xl md:rounded-2xl flex items-center justify-center text-emerald-500 shrink-0">
               <Save size={24} className="md:w-8 md:h-8" />
             </div>
             <div>
-              <div className="text-[8px] md:text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em] mb-0.5 md:mb-1">
+              <div className="text-[8px] md:text-[10px] font-varsity text-emerald-500 uppercase tracking-[0.2em] mb-0.5 md:mb-1">
                 Pick Status • {isLocked ? 'LOCKED' : 'OPEN'}
               </div>
-              <h3 className="text-lg md:text-2xl font-black text-white leading-tight">
+              <h3 className="text-lg md:text-2xl font-varsity text-white leading-tight uppercase tracking-tighter">
                 {isLocked ? 'Selections are Final' : 'Customize Your Picks'}
               </h3>
             </div>
@@ -353,25 +353,25 @@ function SelectionRoom({
           <div className="flex items-center justify-between md:justify-end gap-4 md:gap-8 w-full md:w-auto">
             <div className="flex items-center gap-4 md:gap-8">
               <div className="text-center">
-                <div className={`text-xl md:text-3xl font-black tabular-nums ${isValidTotal ? 'text-emerald-500' : 'text-rose-500'}`}>
+                <div className={`text-xl md:text-3xl font-varsity tabular-nums tracking-tighter ${isValidTotal ? 'text-emerald-500' : 'text-rose-500'}`}>
                   {selections.reduce((sum, s) => sum + s.chips, 0)}/100
                 </div>
-                <div className="text-[8px] md:text-[10px] uppercase tracking-widest text-slate-500 font-black">Chips</div>
+                <div className="text-[8px] md:text-[10px] uppercase tracking-widest text-slate-500 font-varsity">Chips</div>
               </div>
               <div className="h-8 md:h-10 w-px bg-slate-800" />
               <div className="text-center">
-                <div className={`text-xl md:text-3xl font-black tabular-nums ${isValidCount ? 'text-emerald-500' : 'text-rose-500'}`}>
+                <div className={`text-xl md:text-3xl font-varsity tabular-nums tracking-tighter ${isValidCount ? 'text-emerald-500' : 'text-rose-500'}`}>
                   {selections.length}/{contest.selection_limit}
                 </div>
-                <div className="text-[8px] md:text-[10px] uppercase tracking-widest text-slate-500 font-black">Teams</div>
+                <div className="text-[8px] md:text-[10px] uppercase tracking-widest text-slate-500 font-varsity">Teams</div>
               </div>
             </div>
             <button
               onClick={onSave}
               disabled={!canSave || saving}
-              className={`px-6 md:px-10 py-3 md:py-4 text-white text-xs md:text-sm font-black rounded-xl md:rounded-2xl transition-all flex items-center gap-2 md:gap-3 shadow-lg active:scale-95 shrink-0 ${
+              className={`px-6 md:px-10 py-3 md:py-4 text-white text-xs md:text-sm font-varsity uppercase tracking-widest rounded-xl md:rounded-2xl transition-all flex items-center gap-2 md:gap-3 shadow-lg active:scale-95 shrink-0 ${
                 canSave 
-                  ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/40' 
+                  ? 'bg-emerald-600 hover:bg-emerald-500' 
                   : 'bg-slate-800 opacity-50 cursor-not-allowed'
               }`}
             >
@@ -398,25 +398,25 @@ function SelectionRoom({
           return (
             <div 
               key={team.id}
-              className={`p-4 md:p-6 rounded-2xl md:rounded-3xl border transition-all ${
-                isSelected ? 'bg-slate-800 border-emerald-500 shadow-lg shadow-emerald-500/5' : 
-                'bg-slate-900 border-slate-800 hover:border-slate-700'
+              className={`p-4 md:p-6 rounded-2xl md:rounded-3xl border-4 transition-all ${
+                isSelected ? 'bg-white border-emerald-500 shadow-lg' : 
+                'bg-white border-slate-200 hover:border-blue-400'
               }`}
             >
               <div className="flex justify-between items-start mb-4 md:mb-6">
                 <div className="min-w-0">
-                  <h3 className="font-black text-lg md:text-xl text-white truncate">{team.team_name}</h3>
-                  <div className="text-[8px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mt-0.5 md:mt-1">
+                  <h3 className="font-varsity text-lg md:text-xl text-slate-900 truncate uppercase tracking-tight">{team.team_name}</h3>
+                  <div className="text-[8px] md:text-[10px] font-varsity text-slate-400 uppercase tracking-[0.2em] mt-0.5 md:mt-1">
                     {team.abbreviation}
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1.5 md:gap-2 shrink-0">
                   {isSelected && <CheckCircle2 className="text-emerald-500 w-5 h-5 md:w-6 md:h-6" size={24} />}
-                  <div className="bg-slate-950 px-2 md:px-3 py-1 md:py-1.5 rounded-lg md:rounded-xl border border-slate-800 shadow-inner text-right">
-                    <span className="text-[7px] md:text-[8px] font-black text-slate-500 uppercase tracking-widest block leading-none mb-0.5 md:mb-1">
+                  <div className="bg-slate-50 px-2 md:px-3 py-1 md:py-1.5 rounded-lg md:rounded-xl border-2 border-slate-200 shadow-inner text-right">
+                    <span className="text-[7px] md:text-[8px] font-varsity text-slate-400 uppercase tracking-widest block leading-none mb-0.5 md:mb-1">
                       {contest.metric_key === 'wins' ? 'O/U Line' : `${formatMetric(contest.metric_key)}`}
                     </span>
-                    <span className="text-base md:text-lg font-black text-amber-500 leading-none">
+                    <span className="text-base md:text-lg font-varsity text-blue-600 leading-none">
                       {contest.metric_key === 'wins' ? team.ou_line : (parseDate(contest.start_time) <= new Date() ? Math.max(0, (team.stats[contest.metric_key as keyof typeof team.stats] || 0) - (contest.starting_stats?.[team.id] || 0)) : 0)}
                     </span>
                   </div>
@@ -428,20 +428,20 @@ function SelectionRoom({
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => onSideChange(team.id, 'over')}
-                      className={`flex-1 py-2.5 md:py-3 rounded-lg md:rounded-xl text-[10px] md:text-xs font-black transition-all border-2 ${
+                      className={`flex-1 py-2.5 md:py-3 rounded-lg md:rounded-xl text-[10px] md:text-xs font-varsity uppercase tracking-widest transition-all border-2 ${
                         selection?.side === 'over' 
-                          ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg shadow-emerald-900/40' 
-                          : 'bg-slate-950 border-slate-900 text-slate-500 hover:bg-slate-900'
+                          ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg' 
+                          : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'
                       }`}
                     >
                       OVER
                     </button>
                     <button
                       onClick={() => onSideChange(team.id, 'under')}
-                      className={`flex-1 py-2.5 md:py-3 rounded-lg md:rounded-xl text-[10px] md:text-xs font-black transition-all border-2 ${
+                      className={`flex-1 py-2.5 md:py-3 rounded-lg md:rounded-xl text-[10px] md:text-xs font-varsity uppercase tracking-widest transition-all border-2 ${
                         selection?.side === 'under' 
-                          ? 'bg-rose-600 border-rose-500 text-white shadow-lg shadow-rose-900/40' 
-                          : 'bg-slate-950 border-slate-900 text-slate-500 hover:bg-slate-900'
+                          ? 'bg-rose-600 border-rose-500 text-white shadow-lg' 
+                          : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'
                       }`}
                     >
                       UNDER
@@ -450,10 +450,10 @@ function SelectionRoom({
                 ) : (
                   <button
                     onClick={() => onSideChange(team.id, 'over')}
-                    className={`w-full py-2.5 md:py-3 rounded-lg md:rounded-xl text-[10px] md:text-xs font-black transition-all border-2 ${
+                    className={`w-full py-2.5 md:py-3 rounded-lg md:rounded-xl text-[10px] md:text-xs font-varsity uppercase tracking-widest transition-all border-2 ${
                       isSelected 
-                        ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg shadow-emerald-900/40' 
-                        : 'bg-slate-950 border-slate-900 text-slate-500 hover:bg-slate-900'
+                        ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg' 
+                        : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'
                     }`}
                   >
                     {isSelected ? 'SELECTED' : 'SELECT TEAM'}
@@ -461,10 +461,10 @@ function SelectionRoom({
                 )}
 
                 {contest.use_chips && (
-                  <div className="flex flex-col gap-2 md:gap-3 p-3 md:p-4 bg-slate-950 rounded-xl md:rounded-2xl border border-slate-900">
+                  <div className="flex flex-col gap-2 md:gap-3 p-3 md:p-4 bg-slate-50 rounded-xl md:rounded-2xl border-2 border-slate-200">
                     <div className="flex justify-between items-center">
-                      <span className="text-[8px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest">Confidence Chips</span>
-                      <span className="font-mono text-emerald-500 font-black text-base md:text-lg">{selection?.chips || 0}</span>
+                      <span className="text-[8px] md:text-[10px] font-varsity text-slate-400 uppercase tracking-widest">Confidence Chips</span>
+                      <span className="font-varsity text-blue-600 text-base md:text-lg">{selection?.chips || 0}</span>
                     </div>
                     <input
                       type="range"
@@ -475,9 +475,9 @@ function SelectionRoom({
                       onChange={(e) => {
                         onChipChange(team.id, parseInt(e.target.value));
                       }}
-                      className="w-full h-1.5 md:h-2 bg-slate-900 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                      className="w-full h-1.5 md:h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                     />
-                    <div className="flex justify-between text-[7px] md:text-[8px] text-slate-600 font-black uppercase tracking-tighter">
+                    <div className="flex justify-between text-[7px] md:text-[8px] text-slate-400 font-varsity uppercase tracking-widest">
                       <span>5 (MIN)</span>
                       <span>40 (MAX)</span>
                     </div>
@@ -527,17 +527,17 @@ function ContestSelector({
     <div className="relative">
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-4 px-5 py-2.5 bg-slate-950 rounded-2xl border border-slate-800 hover:border-slate-700 transition-all group shadow-lg"
+        className="flex items-center gap-4 px-5 py-2.5 bg-white rounded-2xl border-2 border-slate-200 hover:border-blue-400 transition-all group shadow-lg"
       >
         <div className="flex flex-col items-start">
-          <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] leading-none mb-1.5">Active Contest</span>
-          <span className="text-sm font-black text-white group-hover:text-emerald-500 transition-colors leading-none">{currentContest.theme_name}</span>
+          <span className="text-[9px] font-varsity text-slate-400 uppercase tracking-[0.2em] leading-none mb-1.5">Active Contest</span>
+          <span className="text-sm font-varsity text-slate-900 group-hover:text-blue-600 transition-colors leading-none uppercase tracking-tight">{currentContest.theme_name}</span>
         </div>
-        <div className="flex items-center gap-3 pl-4 border-l border-slate-800">
-          <div className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${getStatus(currentContest).color}`}>
+        <div className="flex items-center gap-3 pl-4 border-l-2 border-slate-100">
+          <div className={`px-2 py-1 rounded-lg text-[8px] font-varsity uppercase tracking-widest ${getStatus(currentContest).color.replace('text-', 'text-white bg-').replace('bg-', 'bg-opacity-80 bg-')}`}>
             {getStatus(currentContest).label}
           </div>
-          <ChevronDown size={16} className={`text-slate-500 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown size={16} className={`text-slate-400 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
         </div>
       </button>
 
@@ -548,7 +548,7 @@ function ContestSelector({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-slate-950/20 backdrop-blur-sm" 
+              className="fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-sm" 
               onClick={() => setIsOpen(false)} 
             />
             <motion.div 
@@ -556,10 +556,10 @@ function ContestSelector({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
               transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-              className="absolute top-full left-0 mt-3 w-80 bg-slate-900 border border-slate-800 rounded-[2rem] shadow-2xl z-50 overflow-hidden"
+              className="absolute top-full left-0 mt-3 w-80 bg-white border-4 border-stitch rounded-[2rem] shadow-2xl z-50 overflow-hidden"
             >
               <div className="p-3 space-y-1 max-h-[400px] overflow-y-auto no-scrollbar">
-                <div className="px-4 py-2 text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-800/50 mb-2">
+                <div className="px-4 py-2 text-[10px] font-varsity text-slate-400 uppercase tracking-widest border-b-2 border-slate-100 mb-2">
                   Switch Contest
                 </div>
                 {contests.sort((a, b) => parseDate(b.start_time).getTime() - parseDate(a.start_time).getTime()).map(c => {
@@ -573,18 +573,18 @@ function ContestSelector({
                         setIsOpen(false);
                       }}
                       className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all group ${
-                        isActive ? 'bg-emerald-500/10 border border-emerald-500/20' : 'hover:bg-slate-800/50'
+                        isActive ? 'bg-slate-50 border-2 border-slate-200' : 'hover:bg-slate-50'
                       }`}
                     >
                       <div className="flex flex-col items-start text-left">
-                        <span className={`text-xs font-black transition-colors ${isActive ? 'text-emerald-500' : 'text-slate-200 group-hover:text-white'}`}>
+                        <span className={`text-xs font-varsity transition-colors uppercase tracking-tight ${isActive ? 'text-blue-600' : 'text-slate-900 group-hover:text-blue-600'}`}>
                           {c.theme_name}
                         </span>
-                        <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-1">
+                        <span className="text-[8px] font-varsity text-slate-400 uppercase tracking-widest mt-1">
                           {c.metric_key.toUpperCase()} • {c.selection_limit} TEAMS
                         </span>
                       </div>
-                      <div className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest shrink-0 ${status.color}`}>
+                      <div className={`px-2 py-1 rounded-lg text-[8px] font-varsity uppercase tracking-widest shrink-0 ${status.color.replace('text-', 'text-white bg-').replace('bg-', 'bg-opacity-80 bg-')}`}>
                         {status.label}
                       </div>
                     </button>
@@ -865,15 +865,22 @@ export default function Drafting({ contest, contests, onContestChange }: Draftin
     }
   };
 
-  if (loading) return <div className="text-center p-8">Loading Drafting Room...</div>;
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center p-20 space-y-6">
+      <div className="w-16 h-16 border-4 border-slate-200 border-t-stitch rounded-full animate-spin" />
+      <div className="text-xl font-varsity text-slate-400 uppercase tracking-widest animate-pulse">
+        Entering the Dugout...
+      </div>
+    </div>
+  );
 
   return (
-    <div className="relative h-full overflow-y-auto">
+    <div className="relative h-full overflow-y-auto bg-field">
       {/* Header - Sticky */}
-      <div className="sticky top-0 inset-x-0 w-full z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 shadow-2xl px-4 md:px-8 h-[80px] flex items-center">
+      <div className="sticky top-0 inset-x-0 w-full z-40 bg-white/95 backdrop-blur-md border-b-4 border-stitch shadow-2xl px-4 md:px-8 h-[80px] flex items-center">
         <div className="flex justify-between items-center w-full max-w-7xl mx-auto">
           <div className="flex items-center gap-6">
-            <h2 className="hidden md:block text-xl font-black text-emerald-500 tracking-tighter">
+            <h2 className="hidden md:block text-xl font-varsity text-blue-600 tracking-tighter uppercase">
               {contest.is_draft ? 'SPRINT DRAFT' : 'SELECTION ROOM'}
             </h2>
             <ContestSelector 
@@ -884,16 +891,16 @@ export default function Drafting({ contest, contests, onContestChange }: Draftin
           </div>
           <div className="flex items-center gap-4">
             {!isLocked && timeLeft && (
-              <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 text-emerald-500 text-[10px] font-black rounded-2xl border border-emerald-500/20 shadow-lg shadow-emerald-500/5">
+              <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 text-[10px] font-varsity rounded-2xl border-2 border-emerald-200 shadow-lg uppercase tracking-widest">
                 <Clock size={14} />
                 {timeLeft}
               </div>
             )}
             {isLocked && (
-              <div className={`px-4 py-2 text-[10px] font-black rounded-2xl border shadow-lg ${
+              <div className={`px-4 py-2 text-[10px] font-varsity rounded-2xl border-2 shadow-lg uppercase tracking-widest ${
                 timeLeft === 'COMPLETED' 
-                  ? 'bg-slate-500/10 text-slate-500 border-slate-500/20 shadow-slate-500/5' 
-                  : 'bg-rose-500/10 text-rose-500 border-rose-500/20 shadow-rose-500/5'
+                  ? 'bg-slate-50 text-slate-500 border-slate-200' 
+                  : 'bg-rose-50 text-rose-600 border-rose-200'
               }`}>
                 {timeLeft}
               </div>
@@ -902,20 +909,20 @@ export default function Drafting({ contest, contests, onContestChange }: Draftin
         </div>
       </div>
 
-      <div className="px-4 md:px-8 pb-8 max-w-7xl mx-auto">
+      <div className="px-4 md:px-8 pb-8 max-w-7xl mx-auto mt-8">
         {timeLeft === 'COMPLETED' && (
           <motion.div 
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-8 bg-slate-900 border border-slate-800 p-8 rounded-[2.5rem] text-center shadow-2xl relative overflow-hidden"
+            className="mb-8 bg-white border-4 border-stitch p-8 rounded-[2.5rem] text-center shadow-2xl relative overflow-hidden"
           >
             <div className="absolute inset-0 bg-slate-500/5" />
             <div className="relative z-10">
-              <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center text-slate-500 mx-auto mb-4">
+              <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 mx-auto mb-4 border-2 border-slate-200">
                 <Clock size={32} />
               </div>
-              <h3 className="text-2xl font-black text-white mb-2 uppercase tracking-tight">This Contest is Over</h3>
-              <p className="text-slate-500 text-sm max-w-md mx-auto">
+              <h3 className="text-2xl font-varsity text-slate-900 mb-2 uppercase tracking-tight">This Contest is Over</h3>
+              <p className="text-slate-500 text-sm font-varsity max-w-md mx-auto uppercase tracking-widest opacity-70">
                 The contest has concluded. You can still view the final draft board and selections, but no further changes can be made.
               </p>
             </div>
@@ -923,16 +930,16 @@ export default function Drafting({ contest, contests, onContestChange }: Draftin
         )}
 
         {contest.is_draft && contest.draft_status === 'pending' && isAdmin && timeLeft !== 'COMPLETED' && (
-          <div className="mb-8 bg-amber-500/10 border border-amber-500/20 p-8 rounded-3xl text-center">
-            <h3 className="text-xl font-black text-amber-500 mb-2 uppercase tracking-tight">Draft Not Started</h3>
-            <p className="text-slate-400 mb-6 text-sm max-w-md mx-auto">
+          <div className="mb-8 bg-white border-4 border-stitch p-8 rounded-3xl text-center shadow-xl">
+            <h3 className="text-xl font-varsity text-amber-600 mb-2 uppercase tracking-tight">Draft Not Started</h3>
+            <p className="text-slate-500 mb-6 text-sm font-varsity max-w-md mx-auto uppercase tracking-widest opacity-70">
               As an admin, you need to generate the draft order and start the draft before players can make their picks.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <button
                 onClick={generateOrder}
                 disabled={saving}
-                className="px-8 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-all flex items-center gap-2"
+                className="px-8 py-3 bg-slate-100 hover:bg-slate-200 text-slate-900 font-varsity text-xs uppercase tracking-widest rounded-xl transition-all flex items-center gap-2 border-2 border-slate-200"
               >
                 <ListOrdered size={18} />
                 {contest.draft_order ? 'REGENERATE ORDER' : 'GENERATE ORDER'}
@@ -940,7 +947,7 @@ export default function Drafting({ contest, contests, onContestChange }: Draftin
               <button
                 onClick={startDraft}
                 disabled={saving || !contest.draft_order}
-                className="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-emerald-900/40"
+                className="px-8 py-3 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-varsity text-xs uppercase tracking-widest rounded-xl transition-all flex items-center gap-2 shadow-lg"
               >
                 <Play size={18} />
                 START DRAFT
