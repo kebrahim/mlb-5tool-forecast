@@ -38,6 +38,12 @@ export default function Auth() {
       console.error("Auth error:", error);
       if (error.code === 'auth/operation-not-allowed') {
         toast.error('Email/Password login is not enabled. Please use Google Login or enable it in Firebase Console.');
+      } else if (error.code === 'auth/user-not-found') {
+        toast.error('No player found with this email. Did you sign up yet?');
+      } else if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        toast.error('Invalid email or password. Please try again.');
+      } else if (error.code === 'auth/email-already-in-use') {
+        toast.error('This email is already on the roster. Try logging in instead!');
       } else {
         toast.error(error.message);
       }
