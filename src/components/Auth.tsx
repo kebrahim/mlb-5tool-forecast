@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { auth, db } from '../firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
 import { LogIn, UserPlus, LogOut } from 'lucide-react';
@@ -27,7 +27,7 @@ export default function Auth() {
         // Initialize user profile
         const role = email === 'kebrahim@gmail.com' ? 'admin' : 'player';
         await setDoc(doc(db, 'users', user.uid), {
-          display_name: displayName,
+          display_name: displayName || user.displayName || 'Rookie',
           email: email,
           total_cp: 0,
           role: role
@@ -35,6 +35,38 @@ export default function Auth() {
         toast.success('Account created successfully!');
       }
     } catch (error: any) {
+      console.error("Auth error:", error);
+      if (error.code === 'auth/operation-not-allowed') {
+        toast.error('Email/Password login is not enabled. Please use Google Login or enable it in Firebase Console.');
+      } else {
+        toast.error(error.message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    const provider = new GoogleAuthProvider();
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      
+      // Check if user exists in Firestore
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      if (!userDoc.exists()) {
+        const role = user.email === 'kebrahim@gmail.com' ? 'admin' : 'player';
+        await setDoc(doc(db, 'users', user.uid), {
+          display_name: user.displayName || 'Rookie',
+          email: user.email,
+          total_cp: 0,
+          role: role
+        });
+      }
+      toast.success('Signed in with Google!');
+    } catch (error: any) {
+      console.error("Google Auth error:", error);
       toast.error(error.message);
     } finally {
       setLoading(false);
@@ -101,6 +133,25 @@ export default function Auth() {
             className="w-full py-4 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-varsity uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg active:transform active:scale-95"
           >
             {loading ? 'WARMING UP...' : isLogin ? <><LogIn size={20} /> STEP TO THE PLATE</> : <><UserPlus size={20} /> SIGN THE CONTRACT</>}
+          </button>
+
+          <div className="relative my-8">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-200"></div>
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-white px-2 text-slate-500 font-varsity tracking-widest">Or continue with</span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={loading}
+            className="w-full py-4 bg-white hover:bg-slate-50 disabled:opacity-50 text-slate-900 font-varsity uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-3 border-2 border-slate-200 shadow-sm active:transform active:scale-95"
+          >
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" referrerPolicy="no-referrer" />
+            Sign in with Google
           </button>
         </form>
 
