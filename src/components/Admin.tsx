@@ -3,7 +3,7 @@ import { db, auth } from '../firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { doc, setDoc, updateDoc, collection, writeBatch, onSnapshot, getDocs, deleteDoc, query, Timestamp } from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
-import { Database, ShieldCheck, AlertCircle, Clock, RefreshCw, Power, ListOrdered, Play, Trash2, UserMinus, Mail, Search } from 'lucide-react';
+import { Database, ShieldCheck, AlertCircle, Clock, RefreshCw, Power, ListOrdered, Play, Trash2, UserMinus, Mail, Search, Trophy } from 'lucide-react';
 import { MLB_TEAMS, DEFAULT_LINES } from '../mlbData';
 import { UserProfile, Contest } from '../types';
 
@@ -241,18 +241,25 @@ export default function Admin() {
     try {
       toast.loading(`Testing MLB API for LAA as of ${testDate}...`, { id: 'api-test' });
       
-      // 1. Test hitting gameLog
+      // 1. Test hitting gameLog (HRs)
       const hitRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${testTeamId}/stats?stats=gameLog&group=hitting&season=2024&endDate=${testDate}`);
       const hitData = await hitRes.json();
-      const games = hitData.stats?.[0]?.splits?.length || 0;
+      const hGames = hitData.stats?.[0]?.splits?.length || 0;
       let hrs = 0;
       hitData.stats?.[0]?.splits?.forEach((s: any) => hrs += s.stat.homeRuns);
+
+      // 2. Test pitching gameLog (Ks)
+      const pitchRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${testTeamId}/stats?stats=gameLog&group=pitching&season=2024&endDate=${testDate}`);
+      const pitchData = await pitchRes.json();
+      const pGames = pitchData.stats?.[0]?.splits?.length || 0;
+      let ks = 0;
+      pitchData.stats?.[0]?.splits?.forEach((s: any) => ks += s.stat.strikeOuts);
       
       console.log(`API Test Results for LAA as of ${testDate}:`);
-      console.log(`Games found: ${games}`);
-      console.log(`Total HRs (summed): ${hrs}`);
+      console.log(`Hitting Games: ${hGames}, HRs: ${hrs}`);
+      console.log(`Pitching Games: ${pGames}, Pitching Ks: ${ks}`);
       
-      toast.success(`API Test Complete! Found ${games} games and ${hrs} HRs for LAA. Check console for details.`, { id: 'api-test' });
+      toast.success(`API Test Complete! LAA had ${hrs} HRs and ${ks} Pitching Ks. Check console.`, { id: 'api-test' });
     } catch (error: any) {
       console.error("API Test Error:", error);
       toast.error(`API Test Failed: ${error.message}`, { id: 'api-test' });
@@ -381,70 +388,79 @@ export default function Admin() {
   };
 
   const performMLBSync = async (showToasts = true) => {
-    if (showToasts) toast.loading("Fetching MLB Standings...", { id: 'sync-status' });
+    if (showToasts) toast.loading("Fetching MLB Data...", { id: 'sync-status' });
     
-    // 1. Fetch Standings
+    // 1. Fetch Standings (Wins/Losses)
     const standingsRes = await fetch("https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=2026&standingsTypes=regularSeason");
     const standingsData = await standingsRes.json();
+    
+    // 2. Fetch ALL Team Hitting (Bulk)
+    const hitRes = await fetch("https://statsapi.mlb.com/api/v1/stats?stats=season&group=hitting&sportId=1&season=2026");
+    const hitData = await hitRes.json();
+
+    // 3. Fetch ALL Team Pitching (Bulk)
+    const pitchRes = await fetch("https://statsapi.mlb.com/api/v1/stats?stats=season&group=pitching&sportId=1&season=2026");
+    const pitchData = await pitchRes.json();
     
     if (!standingsData.records || standingsData.records.length === 0) {
       throw new Error("No standings records found in MLB API for 2026.");
     }
 
-    const teamStatsMap: Record<string, { wins: number, losses: number }> = {};
+    const teamStatsMap: Record<string, any> = {};
+
+    // Process Standings
     standingsData.records.forEach((record: any) => {
       record.teamRecords?.forEach((tr: any) => {
-        teamStatsMap[tr.team.id.toString()] = {
+        const tid = tr.team.id.toString();
+        teamStatsMap[tid] = {
           wins: tr.wins,
-          losses: tr.losses
+          losses: tr.losses,
+          hrs: 0,
+          ks: 0,
+          stolenBases: 0
         };
       });
     });
 
-    if (showToasts) toast.loading("Updating team stats...", { id: 'sync-status' });
+    // Process Bulk Hitting
+    hitData.stats?.[0]?.splits?.forEach((split: any) => {
+      const tid = split.team.id.toString();
+      if (teamStatsMap[tid]) {
+        teamStatsMap[tid].hrs = split.stat.homeRuns || 0;
+        teamStatsMap[tid].stolenBases = split.stat.stolenBases || 0;
+      }
+    });
+
+    // Process Bulk Pitching
+    pitchData.stats?.[0]?.splits?.forEach((split: any) => {
+      const tid = split.team.id.toString();
+      if (teamStatsMap[tid]) {
+        teamStatsMap[tid].ks = split.stat.strikeOuts || 0;
+      }
+    });
+
+    if (showToasts) toast.loading("Updating database...", { id: 'sync-status' });
     
     const batch = writeBatch(db);
     let updatedCount = 0;
 
-    // Process teams in chunks to avoid overwhelming the browser/API
     for (const team of MLB_TEAMS) {
-      const mlbStats = teamStatsMap[team.id];
-      if (mlbStats) {
-        try {
-          // Fetch HRs and Ks for each team
-          const [hitRes, pitchRes] = await Promise.all([
-            fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=season&group=hitting&season=2026`),
-            fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=season&group=pitching&season=2026`)
-          ]);
-          
-          const hitData = await hitRes.json();
-          const pitchData = await pitchRes.json();
-          
-          const hrs = hitData.stats?.[0]?.splits?.[0]?.stat?.homeRuns || 0;
-          const ks = pitchData.stats?.[0]?.splits?.[0]?.stat?.strikeOuts || 0;
-
-          batch.update(doc(db, 'team_lines', team.id), {
-            "stats.wins": mlbStats.wins,
-            "stats.losses": mlbStats.losses,
-            "stats.hrs": hrs,
-            "stats.ks": ks,
-            last_sync: new Date().toISOString()
-          });
-          updatedCount++;
-        } catch (e) {
-          console.warn(`Failed to fetch extra stats for ${team.name}`, e);
-          batch.update(doc(db, 'team_lines', team.id), {
-            "stats.wins": mlbStats.wins,
-            "stats.losses": mlbStats.losses,
-            last_sync: new Date().toISOString()
-          });
-          updatedCount++;
-        }
+      const stats = teamStatsMap[team.id];
+      if (stats) {
+        batch.update(doc(db, 'team_lines', team.id), {
+          "stats.wins": stats.wins,
+          "stats.losses": stats.losses,
+          "stats.hrs": stats.hrs,
+          "stats.ks": stats.ks,
+          "stats.stolenBases": stats.stolenBases,
+          last_sync: new Date().toISOString()
+        });
+        updatedCount++;
       }
     }
 
     await batch.commit();
-    if (showToasts) toast.success(`Sync successful! ${updatedCount} teams updated.`, { id: 'sync-status' });
+    if (showToasts) toast.success(`Sync successful! ${updatedCount} teams updated in record time.`, { id: 'sync-status' });
     return updatedCount;
   };
 
@@ -475,6 +491,54 @@ export default function Admin() {
       }, { merge: true });
       toast.success('Win total updated!');
       setEditingTeamId(null);
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatMetricLabel = (key: string) => {
+    switch (key?.toLowerCase()) {
+      case 'hrs': return 'Home Runs';
+      case 'ks': return 'Pitching Ks';
+      case 'wins': return 'CP Hits';
+      case 'stolenbases': return 'Stolen Bases';
+      default: return key?.toUpperCase() || 'UNKNOWN';
+    }
+  };
+
+  const seedMayContest = async () => {
+    setLoading(true);
+    try {
+      const maySprint = { 
+        id: 'may_2026', 
+        name: 'May Strikeout King', 
+        description: 'Draft 3 teams. Total strikeouts thrown by your pitching staff in May decides the winner!',
+        metric: 'ks', 
+        start: '2026-05-01T00:00:00-04:00', 
+        end: '2026-06-01T00:00:00-04:00', 
+        limit: 3, 
+        chips: false, 
+        draft: true 
+      };
+      
+      const sprintRef = doc(db, 'contests', maySprint.id);
+      await setDoc(sprintRef, {
+        theme_name: maySprint.name,
+        description: maySprint.description,
+        metric_key: maySprint.metric,
+        start_time: Timestamp.fromDate(new Date(maySprint.start)),
+        end_time: Timestamp.fromDate(new Date(maySprint.end)),
+        is_active: true,
+        selection_limit: maySprint.limit,
+        use_chips: maySprint.chips,
+        is_draft: maySprint.draft,
+        draft_status: 'pending',
+        current_turn_index: 0
+      }, { merge: true });
+      
+      toast.success('May Strikeout King initialized! You can now manage its draft below.');
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -528,11 +592,22 @@ export default function Admin() {
         },
         { 
           id: 'may_2026', 
-          name: 'May Sprint: Strikeout King', 
-          description: 'Draft 3 teams. The total strikeouts thrown by your teams in May determines your score.',
+          name: 'May Strikeout King', 
+          description: 'Draft 3 teams. Total strikeouts thrown by your pitching staff in May decides the winner!',
           metric: 'ks', 
           start: '2026-05-01T00:00:00-04:00', 
           end: '2026-06-01T00:00:00-04:00', 
+          limit: 3, 
+          chips: false, 
+          draft: true 
+        },
+        { 
+          id: 'june_2026', 
+          name: 'June Sprint: Stolen Base Summer', 
+          description: 'Draft 3 teams. Total Stolen Bases in June decides the winner!',
+          metric: 'stolenBases', 
+          start: '2026-06-01T00:00:00-04:00', 
+          end: '2026-07-01T00:00:00-04:00', 
           limit: 3, 
           chips: false, 
           draft: true 
@@ -638,35 +713,25 @@ export default function Admin() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
         <div className="p-4 md:p-6 bg-slate-50 rounded-2xl border-2 border-slate-200">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <RefreshCw className={`${syncing ? 'text-blue-600 animate-spin' : 'text-slate-400'} md:w-[24px] md:h-[24px]`} size={20} />
-              <div>
-                <h3 className="font-varsity text-sm text-slate-900 uppercase tracking-tight">MLB Stats Sync</h3>
-                <p className="text-[10px] font-varsity text-slate-400 uppercase tracking-widest">Manual Trigger</p>
-              </div>
+          <div className="flex items-center gap-3 mb-4">
+            <RefreshCw className={`${syncing ? 'text-blue-600 animate-spin' : 'text-slate-400'} md:w-[24px] md:h-[24px]`} size={20} />
+            <div>
+              <h3 className="font-varsity text-sm text-slate-900 uppercase tracking-tight">MLB Stats Sync</h3>
+              <p className="text-[10px] font-varsity text-slate-400 uppercase tracking-widest">Manual Trigger</p>
             </div>
-            <button
-              onClick={handleToggleSync}
-              className={`px-3 py-1 rounded-full text-[10px] font-varsity uppercase tracking-widest transition-all border-2 ${
-                syncEnabled 
-                  ? 'bg-emerald-50 border-emerald-500 text-emerald-600' 
-                  : 'bg-slate-200 border-slate-300 text-slate-500'
-              }`}
-            >
-              {syncEnabled ? 'ENABLED' : 'DISABLED'}
-            </button>
           </div>
           <p className="text-[10px] font-varsity text-slate-500 leading-relaxed mb-4 uppercase tracking-widest opacity-70">
-            Trigger a manual sync of real-time MLB standings, home runs, and strikeouts directly from your browser.
+            Now using optimized bulk fetching. Syncs W/L, HRs, Ks, and SBs for all 30 teams in seconds.
           </p>
-          <div className="flex items-center gap-2 text-[10px] font-varsity mb-4 uppercase tracking-widest">
-            <span className="w-2 h-2 rounded-full bg-blue-600" />
-            <span className="text-blue-600">
-              MODE: MANUAL (BROWSER-BASED)
-            </span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2">
+            <button
+              onClick={handleManualSync}
+              disabled={syncing}
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-[10px] font-varsity uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2 shadow-md"
+            >
+              <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
+              {syncing ? 'Syncing...' : 'Sync MLB Data'}
+            </button>
             <button
               onClick={testMlbApi}
               disabled={syncing}
@@ -675,13 +740,28 @@ export default function Admin() {
               <Search size={14} />
               Verify MLB API
             </button>
+          </div>
+        </div>
+
+        <div className="p-4 md:p-6 bg-blue-600 rounded-2xl border-4 border-white shadow-xl">
+          <div className="flex items-center gap-3 mb-4">
+            <Trophy className="text-white md:w-[24px] md:h-[24px]" size={20} />
+            <div>
+              <h3 className="font-varsity text-sm text-white uppercase tracking-tight">May Sprint Launch</h3>
+              <p className="text-[10px] font-varsity text-blue-200 uppercase tracking-widest">One-Click Setup</p>
+            </div>
+          </div>
+          <p className="text-[10px] font-varsity text-blue-100 leading-relaxed mb-6 uppercase tracking-widest">
+            Safely initialize the May Strikeout King contest. This will NOT affect teams, win totals, or other contests.
+          </p>
+          <div className="grid grid-cols-1 gap-2">
             <button
-              onClick={handleManualSync}
-              disabled={syncing}
-              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-[10px] font-varsity uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2 shadow-md"
+              onClick={seedMayContest}
+              disabled={loading}
+              className="w-full px-4 py-3 bg-white hover:bg-blue-50 text-blue-600 text-xs font-varsity uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-3 shadow-lg active:scale-95"
             >
-              <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
-              {syncing ? 'Syncing...' : 'Sync Now'}
+              <Database size={16} />
+              {loading ? 'Seeding...' : 'Seed May Contest'}
             </button>
           </div>
         </div>
@@ -690,23 +770,24 @@ export default function Admin() {
           <div className="flex items-center gap-3 mb-4">
             <Database className="text-blue-600 md:w-[24px] md:h-[24px]" size={20} />
             <div>
-              <h3 className="font-varsity text-sm text-slate-900 uppercase tracking-tight">Data Seeding</h3>
-              <p className="text-[10px] font-varsity text-slate-400 uppercase tracking-widest">Initial Setup</p>
+              <h3 className="font-varsity text-sm text-slate-900 uppercase tracking-tight">Full Initial Seed</h3>
+              <p className="text-[10px] font-varsity text-slate-400 uppercase tracking-widest">Global Reset</p>
             </div>
           </div>
           <p className="text-[10px] font-varsity text-slate-500 leading-relaxed mb-6 uppercase tracking-widest opacity-70">
-            Reset teams, lines, and contests. Use this for initial setup or season resets.
+            Initialize ALL teams, O/U lines, and all monthly sprints for 2026. Warning: Resets team stats.
           </p>
-          <button
-            onClick={seedData}
-            disabled={loading}
-            className="w-full px-4 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-900 text-[10px] font-varsity uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2 border-2 border-slate-200"
-          >
-            <Database size={16} />
-            {loading ? 'Seeding...' : 'Seed Initial Data'}
-          </button>
+          <div className="grid grid-cols-1 gap-2">
+            <button
+              onClick={seedData}
+              disabled={loading}
+              className="w-full px-4 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-900 text-[10px] font-varsity uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-3 border-2 border-slate-200"
+            >
+              <Database size={16} />
+              {loading ? 'Seeding...' : 'Full System Seed'}
+            </button>
+          </div>
         </div>
-
         <div className="p-4 md:p-6 bg-slate-50 rounded-2xl border-2 border-slate-200">
           <div className="flex items-center gap-3 mb-4">
             <Trash2 className="text-rose-600 md:w-[24px] md:h-[24px]" size={20} />
@@ -814,204 +895,211 @@ export default function Admin() {
 
       <div className="grid grid-cols-1 gap-4 mb-8">
         <div className="p-4 md:p-6 bg-slate-950 rounded-2xl border border-slate-800">
-          <div className="flex items-center gap-3 mb-6">
-            <Clock className="text-emerald-500 md:w-[24px] md:h-[24px]" size={20} />
-            <div>
-              <h3 className="font-bold text-sm">Contest Schedule Management</h3>
-              <p className="text-[10px] text-slate-500 uppercase tracking-widest">Update Start & End Times</p>
-            </div>
-          </div>
-          
-          <div className="space-y-4">
-            {contests.map(c => (
-              <div key={c.id} className="p-4 bg-slate-900 rounded-xl border border-slate-800">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-sm truncate">{c.theme_name}</div>
-                    <div className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">
-                      ID: {c.id} • Metric: {c.metric_key}
-                    </div>
-                    {editingContestId !== c.id && (
-                      <>
-                        {c.description && (
-                          <div className="text-[10px] text-slate-400 mt-2 italic line-clamp-1">
-                            {c.description}
-                          </div>
-                        )}
-                        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] font-mono text-slate-400">
-                          <div>START: {new Date(c.start_time).toLocaleString()}</div>
-                          <div>END: {new Date(c.end_time).toLocaleString()}</div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {editingContestId === c.id ? (
-                    <div className="flex flex-col gap-4 flex-1">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <div className="w-full">
-                          <label className="text-[8px] uppercase text-slate-500 block mb-1">Contest Title</label>
-                          <input 
-                            type="text" 
-                            value={editTitle}
-                            onChange={(e) => setEditTitle(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-[10px] font-bold"
-                          />
-                        </div>
-                        <div className="w-full">
-                          <label className="text-[8px] uppercase text-slate-500 block mb-1">Metric Key</label>
-                          <select 
-                            value={editMetric}
-                            onChange={(e) => setEditMetric(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-[10px] font-bold"
-                          >
-                            <option value="wins">Wins (O/U)</option>
-                            <option value="hrs">Home Runs</option>
-                            <option value="ks">Strikeouts</option>
-                          </select>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <div className="w-full">
-                          <label className="text-[8px] uppercase text-slate-500 block mb-1">Start Time (ISO)</label>
-                          <input 
-                            type="text" 
-                            value={editStartTime}
-                            onChange={(e) => setEditStartTime(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-[10px] font-mono"
-                          />
-                        </div>
-                        <div className="w-full">
-                          <label className="text-[8px] uppercase text-slate-500 block mb-1">End Time (ISO)</label>
-                          <input 
-                            type="text" 
-                            value={editEndTime}
-                            onChange={(e) => setEditEndTime(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-[10px] font-mono"
-                          />
-                        </div>
-                      </div>
-                      <div className="w-full">
-                        <label className="text-[8px] uppercase text-slate-500 block mb-1">Description</label>
-                        <textarea 
-                          value={editDescription}
-                          onChange={(e) => setEditDescription(e.target.value)}
-                          className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-[10px] leading-relaxed h-16 resize-none"
-                        />
-                      </div>
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => updateContest(c.id)}
-                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-[10px] font-bold rounded-lg transition-all"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={() => setEditingContestId(null)}
-                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-[10px] font-bold rounded-lg transition-all"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                      <div className="flex items-center gap-2">
-                        {c.metric_key !== 'wins' && (
-                          <div className="flex flex-col gap-1">
-                            <button
-                              onClick={() => snapshotStartingStats(c.id)}
-                              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-2 border ${
-                                c.starting_stats 
-                                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' 
-                                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
-                              }`}
-                            >
-                              <RefreshCw size={14} className={c.starting_stats ? '' : 'animate-pulse'} />
-                              {c.starting_stats ? 'Snapshot Taken' : 'Take Start Snapshot'}
-                            </button>
-                            {!c.starting_stats && (
-                              <span className="text-[7px] text-slate-500 uppercase tracking-tighter italic">
-                                * System will auto-snapshot on start
-                              </span>
-                            )}
-                          </div>
-                        )}
-                        <button
-                        onClick={() => {
-                          setEditingContestId(c.id);
-                          setEditStartTime(c.start_time instanceof Timestamp ? c.start_time.toDate().toISOString() : c.start_time);
-                          setEditEndTime(c.end_time instanceof Timestamp ? c.end_time.toDate().toISOString() : c.end_time);
-                          setEditDescription(c.description || '');
-                          setEditTitle(c.theme_name);
-                          setEditMetric(c.metric_key);
-                        }}
-                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-[10px] font-bold rounded-lg transition-all flex items-center gap-2"
-                      >
-                        <Clock size={14} />
-                        Edit
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 mb-8">
-        <div className="p-4 md:p-6 bg-slate-950 rounded-2xl border border-slate-800">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-3">
-              <ListOrdered className="text-amber-500 md:w-[24px] md:h-[24px]" size={20} />
+              <Trophy className="text-emerald-500 md:w-[32px] md:h-[32px]" size={28} />
               <div>
-                <h3 className="font-bold text-sm">Draft Management</h3>
-                <p className="text-[10px] text-slate-500 uppercase tracking-widest">Snake Draft Controls</p>
+                <h2 className="text-xl font-varsity text-white uppercase tracking-tight">Individual Contest Management</h2>
+                <p className="text-[10px] font-varsity text-slate-500 uppercase tracking-widest opacity-70">
+                  Manage dates, drafts, and snapshots for each month separately.
+                </p>
               </div>
             </div>
-            <div className="px-3 py-1 bg-slate-900 rounded-lg border border-slate-800 text-[10px] font-black text-slate-400 uppercase tracking-widest self-start sm:self-auto">
+            <div className="hidden md:block px-3 py-1 bg-slate-900 rounded-lg border border-slate-800 text-[10px] font-black text-slate-400 uppercase tracking-widest">
               Total Users: <span className="text-emerald-500">{users.length}</span>
             </div>
           </div>
           
-          <div className="space-y-4">
-            {contests.filter(c => c.is_active && c.is_draft).map(c => (
-              <div key={c.id} className="p-4 bg-slate-900 rounded-xl border border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="font-bold text-sm truncate">{c.theme_name}</div>
-                  <div className="text-[10px] text-slate-500 uppercase tracking-widest mt-1">
-                    Status: <span className="text-amber-500">{c.draft_status || 'pending'}</span> • 
-                    Current Order: {c.draft_order ? (
-                      <span className="text-slate-300">
-                        {c.draft_order.length} players ({c.draft_order.map(uid => users.find(u => u.uid === uid)?.display_name || 'Unknown').join(', ')})
-                      </span>
-                    ) : 'Not set'}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {contests.sort((a, b) => b.is_active ? 1 : -1).map(c => (
+              <div key={c.id} className="p-5 bg-slate-900 rounded-2xl border border-slate-800 flex flex-col gap-6 shadow-xl hover:border-slate-700 transition-colors">
+                {/* Header & Status */}
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <h3 className="text-base font-bold text-white truncate">{c.theme_name}</h3>
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                       <span className="text-[9px] px-2 py-0.5 bg-slate-950 text-slate-400 rounded uppercase font-bold border border-slate-800">
+                          ID: {c.id}
+                       </span>
+                       <span className="text-[9px] px-2 py-0.5 bg-emerald-500/10 text-emerald-500 rounded uppercase font-bold border border-emerald-500/20">
+                          {formatMetricLabel(c.metric_key)}
+                       </span>
+                    </div>
+                  </div>
+                  <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shrink-0 ${
+                    c.is_active ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-slate-800 text-slate-500 border border-slate-700'
+                  }`}>
+                    {c.is_active ? 'Active' : 'Hidden'}
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => generateDraftOrder(c.id)}
-                    className="flex-1 sm:flex-none px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-[10px] font-bold rounded-lg transition-all flex items-center justify-center gap-2 whitespace-nowrap"
-                  >
-                    <ListOrdered size={14} />
-                    Generate Order
-                  </button>
-                  <button
-                    onClick={() => startDraft(c.id)}
-                    disabled={!c.draft_order || c.draft_status === 'in_progress'}
-                    className="flex-1 sm:flex-none px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-[10px] font-bold rounded-lg transition-all flex items-center justify-center gap-2 whitespace-nowrap"
-                  >
-                    <Play size={14} />
-                    Start Draft
-                  </button>
-                </div>
+
+                {editingContestId === c.id ? (
+                  <div className="space-y-4 bg-slate-950/30 p-4 rounded-xl border border-slate-800/50">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="w-full">
+                        <label className="text-[8px] uppercase text-slate-500 block mb-1">Contest Title</label>
+                        <input 
+                          type="text" 
+                          value={editTitle}
+                          onChange={(e) => setEditTitle(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-[10px] font-bold text-white"
+                        />
+                      </div>
+                      <div className="w-full">
+                        <label className="text-[8px] uppercase text-slate-500 block mb-1">Metric Key</label>
+                        <select 
+                          value={editMetric}
+                          onChange={(e) => setEditMetric(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-[10px] font-bold text-white"
+                        >
+                          <option value="wins">Wins (O/U)</option>
+                          <option value="hrs">Home Runs</option>
+                          <option value="ks">Strikeouts</option>
+                          <option value="stolenBases">Stolen Bases</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="w-full">
+                        <label className="text-[8px] uppercase text-slate-500 block mb-1">Start Time (ISO)</label>
+                        <input 
+                          type="text" 
+                          value={editStartTime}
+                          onChange={(e) => setEditStartTime(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-[10px] font-mono text-emerald-500"
+                        />
+                      </div>
+                      <div className="w-full">
+                        <label className="text-[8px] uppercase text-slate-500 block mb-1">End Time (ISO)</label>
+                        <input 
+                          type="text" 
+                          value={editEndTime}
+                          onChange={(e) => setEditEndTime(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-[10px] font-mono text-rose-500"
+                        />
+                      </div>
+                    </div>
+                    <div className="w-full">
+                      <label className="text-[8px] uppercase text-slate-500 block mb-1">Description</label>
+                      <textarea 
+                        value={editDescription}
+                        onChange={(e) => setEditDescription(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-2 text-[10px] leading-relaxed h-20 resize-none text-slate-300"
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2">
+                       <button
+                        onClick={() => setEditingContestId(null)}
+                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-[10px] font-bold rounded-lg transition-all text-slate-400"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => updateContest(c.id)}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-[10px] font-bold rounded-lg transition-all text-white shadow-lg"
+                      >
+                        Save Changes
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Time Window */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950/50 p-4 rounded-xl border border-slate-800/50">
+                       <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                             <Clock size={16} />
+                          </div>
+                          <div>
+                            <p className="text-[7px] uppercase text-slate-500 tracking-widest font-bold">Starts</p>
+                            <p className="text-[10px] font-mono text-slate-300">
+                               {c.start_time instanceof Timestamp ? c.start_time.toDate().toLocaleString() : new Date(c.start_time).toLocaleString()}
+                            </p>
+                          </div>
+                       </div>
+                       <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-rose-500/10 flex items-center justify-center text-rose-500">
+                             <Clock size={16} />
+                          </div>
+                          <div>
+                            <p className="text-[7px] uppercase text-slate-500 tracking-widest font-bold">Ends</p>
+                            <p className="text-[10px] font-mono text-slate-300">
+                               {c.end_time instanceof Timestamp ? c.end_time.toDate().toLocaleString() : new Date(c.end_time).toLocaleString()}
+                            </p>
+                          </div>
+                       </div>
+                    </div>
+
+                    {/* Operational Controls */}
+                    <div className="flex flex-wrap items-center gap-2 pb-4 border-b border-slate-800">
+                        <button
+                          onClick={() => {
+                            setEditingContestId(c.id);
+                            setEditStartTime(c.start_time instanceof Timestamp ? c.start_time.toDate().toISOString() : c.start_time);
+                            setEditEndTime(c.end_time instanceof Timestamp ? c.end_time.toDate().toISOString() : c.end_time);
+                            setEditDescription(c.description || '');
+                            setEditTitle(c.theme_name);
+                            setEditMetric(c.metric_key);
+                          }}
+                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-[10px] font-bold rounded-lg transition-all flex items-center gap-2 border border-slate-700"
+                        >
+                          <Clock size={14} />
+                          Edit Schedule
+                        </button>
+
+                        {c.metric_key !== 'wins' && (
+                          <button
+                            onClick={() => snapshotStartingStats(c.id)}
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-2 border ${
+                              c.starting_stats 
+                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' 
+                                : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            <RefreshCw size={14} className={c.starting_stats ? '' : 'animate-pulse text-amber-500'} />
+                            {c.starting_stats ? 'Stat Snapshot Verified' : 'Take Start Snapshot'}
+                          </button>
+                        )}
+                    </div>
+
+                    {/* Draft Specific Card */}
+                    {c.is_draft && (
+                       <div className="p-4 bg-slate-950 rounded-xl border-2 border-amber-500/10">
+                          <div className="flex items-center justify-between mb-4">
+                             <div className="flex items-center gap-2">
+                                <span className={`w-2 h-2 rounded-full ${c.draft_status === 'completed' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`}></span>
+                                <p className="text-[10px] font-bold uppercase text-slate-400 tracking-tighter">Draft Stage: <span className="text-white">{c.draft_status || 'Pending'}</span></p>
+                             </div>
+                             {c.draft_order && (
+                                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest italic">
+                                   {c.draft_order.length} Players Enrolled
+                                </div>
+                             )}
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              onClick={() => generateDraftOrder(c.id)}
+                              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all flex items-center justify-center gap-2 border border-slate-700 shadow-sm"
+                            >
+                              <ListOrdered size={14} className="text-amber-500" />
+                              Reset Order
+                            </button>
+                            <button
+                              onClick={() => startDraft(c.id)}
+                              disabled={!c.draft_order || c.draft_status === 'in_progress' || c.draft_status === 'completed'}
+                              className="px-3 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-20 text-white text-[9px] font-black uppercase tracking-widest rounded-lg transition-all flex items-center justify-center gap-2 shadow-inner active:scale-95"
+                            >
+                              <Play size={14} fill="currentColor" />
+                              KICK OFF DRAFT
+                            </button>
+                          </div>
+                       </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
-            {contests.filter(c => c.is_draft).length === 0 && (
-              <div className="text-center py-4 text-xs text-slate-500 italic">
-                No draft contests found.
-              </div>
-            )}
           </div>
         </div>
       </div>

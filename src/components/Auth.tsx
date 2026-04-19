@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { auth, db } from '../firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
-import { LogIn, UserPlus, LogOut } from 'lucide-react';
+import { LogIn, UserPlus, LogOut, KeyRound } from 'lucide-react';
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -12,23 +12,36 @@ export default function Auth() {
   const [displayName, setDisplayName] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const handleResetPassword = async () => {
+    if (!email) {
+      toast.error('Please enter your email address first.');
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, email);
+      toast.success('Password reset email sent! Check your inbox.');
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
       if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
+        await signInWithEmailAndPassword(auth, email.trim(), password);
         toast.success('Welcome back!');
       } else {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
         const user = userCredential.user;
 
         // Initialize user profile
-        const role = email === 'kebrahim@gmail.com' ? 'admin' : 'player';
+        const role = email.trim().toLowerCase() === 'kebrahim@gmail.com' ? 'admin' : 'player';
         await setDoc(doc(db, 'users', user.uid), {
           display_name: displayName || user.displayName || 'Rookie',
-          email: email,
+          email: email.trim().toLowerCase(),
           total_cp: 0,
           role: role
         });
@@ -36,16 +49,26 @@ export default function Auth() {
       }
     } catch (error: any) {
       console.error("Auth error:", error);
-      if (error.code === 'auth/operation-not-allowed') {
+      const errorCode = error.code || '';
+      
+      if (errorCode === 'auth/operation-not-allowed') {
         toast.error('Email/Password login is not enabled. Please use Google Login or enable it in Firebase Console.');
-      } else if (error.code === 'auth/user-not-found') {
-        toast.error('No player found with this email. Did you sign up yet?');
-      } else if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-        toast.error('Invalid email or password. Please try again.');
-      } else if (error.code === 'auth/email-already-in-use') {
+      } else if (errorCode === 'auth/user-not-found' || errorCode === 'auth/invalid-credential') {
+        if (isLogin) {
+          toast.error('Invalid email or password. If you haven\'t signed up with a password yet, please click "Sign Up" below.');
+        } else {
+          toast.error('Invalid credentials. Please try again.');
+        }
+      } else if (errorCode === 'auth/wrong-password') {
+        toast.error('Incorrect password. Try again or reset your password.');
+      } else if (errorCode === 'auth/email-already-in-use') {
         toast.error('This email is already on the roster. Try logging in instead!');
+      } else if (errorCode === 'auth/weak-password') {
+        toast.error('Password is too weak. Use at least 6 characters.');
+      } else if (errorCode === 'auth/invalid-email') {
+        toast.error('Please enter a valid ballpark email address.');
       } else {
-        toast.error(error.message);
+        toast.error(error.message || 'An unexpected error occurred during authentication.');
       }
     } finally {
       setLoading(false);
@@ -122,7 +145,18 @@ export default function Auth() {
           </div>
 
           <div>
-            <label className="block text-xs font-varsity text-slate-500 mb-1 uppercase tracking-widest">Secret Code</label>
+            <div className="flex justify-between items-center mb-1">
+              <label className="block text-xs font-varsity text-slate-500 uppercase tracking-widest">Secret Code</label>
+              {isLogin && (
+                <button
+                  type="button"
+                  onClick={handleResetPassword}
+                  className="text-[10px] font-varsity text-[var(--color-stitch-red)] hover:text-red-700 uppercase tracking-widest transition-colors"
+                >
+                  Forgot?
+                </button>
+              )}
+            </div>
             <input
               type="password"
               value={password}

@@ -79,9 +79,13 @@ function SnakeDraftRoom({
   const [isBoardExpanded, setIsBoardExpanded] = useState(true);
 
   const formatMetric = (key: string) => {
-    if (key.toLowerCase() === 'hrs') return 'Home Runs';
-    if (key.toLowerCase() === 'wins') return 'CP';
-    return key.toUpperCase();
+    switch (key.toLowerCase()) {
+      case 'hrs': return 'Home Runs';
+      case 'ks': return 'Pitching Ks';
+      case 'wins': return 'CP';
+      case 'stolenbases': return 'Stolen Bases';
+      default: return key.toUpperCase();
+    }
   };
 
   return (
@@ -326,9 +330,13 @@ function SelectionRoom({
   onSave: () => void
 }) {
   const formatMetric = (key: string) => {
-    if (key.toLowerCase() === 'hrs') return 'Home Runs';
-    if (key.toLowerCase() === 'wins') return 'CP';
-    return key.toUpperCase();
+    switch (key.toLowerCase()) {
+      case 'hrs': return 'Home Runs';
+      case 'ks': return 'Pitching Ks';
+      case 'wins': return 'CP';
+      case 'stolenbases': return 'Stolen Bases';
+      default: return key.toUpperCase();
+    }
   };
 
   return (

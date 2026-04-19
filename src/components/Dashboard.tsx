@@ -209,9 +209,15 @@ export default function Dashboard() {
   const isLocked = activeContest ? parseDate(activeContest.start_time).getTime() < Date.now() : false;
 
   const formatMetric = (key: string) => {
-    if (key.toLowerCase() === 'hrs') return 'Home Runs';
-    if (key.toLowerCase() === 'wins') return 'CP';
-    return key.toUpperCase();
+    switch (key.toLowerCase()) {
+      case 'hrs': return 'Home Runs';
+      case 'ks': return 'Pitching Ks';
+      case 'wins': return 'CP';
+      case 'stolenbases': return 'Stolen Bases';
+      case 'rbi': return 'RBIs';
+      case 'avg': return 'Avg';
+      default: return key.toUpperCase();
+    }
   };
 
   const contestsWithMyTurn = useMemo(() => {

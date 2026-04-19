@@ -11,6 +11,7 @@ export interface TeamStats {
   losses: number;
   hrs: number;
   ks: number;
+  stolenBases: number;
 }
 
 export interface TeamLine {
