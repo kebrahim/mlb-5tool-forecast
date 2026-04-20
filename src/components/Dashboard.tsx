@@ -278,19 +278,34 @@ export default function Dashboard() {
     const start = parseDate(c.start_time);
     const end = parseDate(c.end_time);
 
+    let statusIdentifier: 'completed' | 'live' | 'drafted' | 'drafting' | 'upcoming' | 'open' = 'upcoming';
+
     if (c.is_draft) {
       if (c.draft_status === 'completed') {
-        if (now > end) return { label: 'Completed', color: 'text-slate-500 bg-slate-500/10' };
-        if (now > start) return { label: 'Live', color: 'text-emerald-500 bg-emerald-500/10' };
-        return { label: 'Drafted', color: 'text-blue-500 bg-blue-500/10' };
+        if (now > end) statusIdentifier = 'completed';
+        else if (now > start) statusIdentifier = 'live';
+        else statusIdentifier = 'drafted';
+      } else if (c.draft_status === 'in_progress') {
+        statusIdentifier = 'drafting';
+      } else {
+        statusIdentifier = 'upcoming';
       }
-      if (c.draft_status === 'in_progress') return { label: 'Drafting', color: 'text-amber-500 bg-amber-500/10' };
-      return { label: 'Upcoming', color: 'text-slate-400 bg-slate-400/10' };
     } else {
-      if (now > end) return { label: 'Completed', color: 'text-slate-500 bg-slate-500/10' };
-      if (now > start) return { label: 'Live', color: 'text-emerald-500 bg-emerald-500/10' };
-      return { label: 'Open', color: 'text-amber-500 bg-amber-500/10' };
+      if (now > end) statusIdentifier = 'completed';
+      else if (now > start) statusIdentifier = 'live';
+      else statusIdentifier = 'open';
     }
+
+    const configs = {
+      completed: { label: 'Completed', color: 'text-slate-500 bg-slate-500/10' },
+      live: { label: 'Live', color: 'text-emerald-500 bg-emerald-500/10' },
+      drafted: { label: 'Drafted', color: 'text-blue-500 bg-blue-500/10' },
+      drafting: { label: 'Drafting', color: 'text-amber-500 bg-amber-500/10' },
+      upcoming: { label: 'Upcoming', color: 'text-slate-400 bg-slate-400/10' },
+      open: { label: 'Open', color: 'text-amber-500 bg-amber-500/10' },
+    };
+
+    return { ...configs[statusIdentifier], statusType: statusIdentifier };
   };
 
   return (
@@ -433,14 +448,19 @@ export default function Dashboard() {
                       }`}
                     >
                     <div className="flex items-center justify-between gap-2">
-                      <div className="text-[10px] font-varsity truncate uppercase tracking-tight">{contest.theme_name}</div>
-                      <div className={`px-1.5 py-0.5 rounded text-[7px] font-varsity uppercase tracking-widest shrink-0 ${
-                        contest.draft_status === 'in_progress' 
-                          ? 'bg-amber-500 text-amber-950 animate-pulse' 
-                          : getContestStatus(contest).color.replace('text-', 'text-white bg-').replace('bg-', 'bg-opacity-20 bg-')
-                      }`}>
-                        {contest.draft_status === 'in_progress' ? 'DRAFTING' : getContestStatus(contest).label}
-                      </div>
+                       <div className="text-[10px] font-varsity truncate uppercase tracking-tight">{contest.theme_name}</div>
+                       {(() => {
+                         const statusObj = getContestStatus(contest);
+                         return (
+                           <div className={`px-1.5 py-0.5 rounded text-[7px] font-varsity uppercase tracking-widest shrink-0 ${
+                             statusObj.statusType === 'live' ? 'bg-emerald-500 text-white font-bold' :
+                             statusObj.statusType === 'drafting' ? 'bg-amber-500 text-amber-950 font-black shadow-sm' :
+                             'bg-slate-700 text-white'
+                           }`}>
+                             {statusObj.statusType === 'drafting' ? 'DRAFTING' : statusObj.label}
+                           </div>
+                         );
+                       })()}
                     </div>
                     </div>
                   ))}
@@ -705,10 +725,16 @@ export default function Dashboard() {
                                 <div className="absolute inset-0 bg-[var(--color-stitch-red)]/5 opacity-0 group-hover:opacity-100 transition-opacity" />
                                 <div className="relative z-10 flex flex-col h-full">
                                   <div className="flex justify-between items-start mb-3 md:mb-4">
-                                    <div className={`px-2 md:px-3 py-0.5 md:py-1 rounded-lg md:rounded-xl text-[8px] md:text-[10px] font-varsity uppercase tracking-widest ${
-                                      contest.draft_status === 'in_progress'
-                                        ? 'bg-amber-500 text-amber-950 animate-pulse font-black'
-                                        : status.color.replace('text-', 'text-white bg-').replace('bg-', 'bg-opacity-80 bg-')
+                                    <div className={`px-2 md:px-3 py-0.5 md:py-1 rounded-lg md:rounded-xl text-[8px] md:text-[10px] font-varsity uppercase tracking-widest font-black shadow-sm ${
+                                      contest.draft_status === 'in_progress' || status.statusType === 'drafting'
+                                        ? 'bg-amber-500 text-amber-950 animate-pulse'
+                                        : status.statusType === 'live'
+                                        ? 'bg-emerald-600 text-white border border-emerald-400/30'
+                                        : status.statusType === 'drafted'
+                                        ? 'bg-blue-600 text-white border border-blue-400/30'
+                                        : status.statusType === 'completed'
+                                        ? 'bg-slate-500 text-white'
+                                        : 'bg-slate-200 text-slate-600'
                                     }`}>
                                       {contest.draft_status === 'in_progress' ? 'LIVE DRAFT' : status.label}
                                     </div>
@@ -777,10 +803,20 @@ export default function Dashboard() {
                             <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
                               <div className="flex-1">
                                 <div className="flex items-center gap-3 mb-4">
-                                  <div className={`px-3 py-1 rounded-xl text-[10px] font-varsity uppercase tracking-widest ${getContestStatus(activeContest).color.replace('text-', 'text-white bg-').replace('bg-', 'bg-opacity-80 bg-')}`}>
-                                    {getContestStatus(activeContest).label}
-                                  </div>
-                                  <span className="text-[10px] font-varsity text-slate-500 uppercase tracking-[0.2em]">
+                                  {(() => {
+                                    const statusObj = getContestStatus(activeContest);
+                                    return (
+                                      <div className={`px-4 py-1.5 rounded-xl text-[11px] font-varsity uppercase tracking-[0.15em] font-black shadow-lg border-2 border-white/20 transition-all ${
+                                        statusObj.statusType === 'live' ? 'bg-emerald-600 text-white shadow-emerald-500/20 border-emerald-400' :
+                                        statusObj.statusType === 'drafting' ? 'bg-amber-500 text-amber-950 shadow-amber-500/10' :
+                                        statusObj.statusType === 'completed' ? 'bg-slate-600 text-white' :
+                                        'bg-blue-600 text-white'
+                                      }`}>
+                                        {statusObj.statusType === 'drafting' ? 'DRAFTING NOW' : statusObj.label}
+                                      </div>
+                                    );
+                                  })()}
+                                  <span className="text-[10px] font-varsity text-slate-500 uppercase tracking-[0.2em] font-bold">
                                     {activeContest.is_draft ? 'Snake Draft' : 'Selection Room'}
                                   </span>
                                 </div>

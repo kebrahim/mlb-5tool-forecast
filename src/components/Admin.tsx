@@ -186,16 +186,18 @@ export default function Admin() {
     const statsPromises = MLB_TEAMS.map(async (team) => {
       try {
         // Fetch hitting gameLog
-        const hitRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=gameLog&group=hitting&season=${season}&endDate=${dateStr}`);
+        const hitRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=gameLog&group=hitting&season=${season}&endDate=${dateStr}&gameType=R`);
         const hitData = await hitRes.json();
         
         let totalHRs = 0;
+        let totalSBs = 0;
         hitData.stats?.[0]?.splits?.forEach((split: any) => {
           totalHRs += split.stat?.homeRuns || 0;
+          totalSBs += split.stat?.stolenBases || 0;
         });
 
         // Fetch pitching gameLog
-        const pitchRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=gameLog&group=pitching&season=${season}&endDate=${dateStr}`);
+        const pitchRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=gameLog&group=pitching&season=${season}&endDate=${dateStr}&gameType=R`);
         const pitchData = await pitchRes.json();
         
         let totalKs = 0;
@@ -206,7 +208,8 @@ export default function Admin() {
         return {
           id: team.id,
           hrs: totalHRs,
-          ks: totalKs
+          ks: totalKs,
+          stolenBases: totalSBs
         };
       } catch (e) {
         console.error(`Error fetching historical stats for ${team.name}`, e);
@@ -219,13 +222,15 @@ export default function Admin() {
       if (teamStats[stat.id]) {
         teamStats[stat.id].hrs = stat.hrs;
         teamStats[stat.id].ks = stat.ks;
+        teamStats[stat.id].stolenBases = stat.stolenBases;
       } else {
         // If team not in standings (unlikely but possible if no games played yet), still record stats
         teamStats[stat.id.toString()] = {
           wins: 0,
           losses: 0,
           hrs: stat.hrs,
-          ks: stat.ks
+          ks: stat.ks,
+          stolenBases: stat.stolenBases
         };
       }
     });
@@ -388,27 +393,21 @@ export default function Admin() {
   };
 
   const performMLBSync = async (showToasts = true) => {
-    if (showToasts) toast.loading("Fetching MLB Data...", { id: 'sync-status' });
+    if (showToasts) toast.loading("Fetching MLB Standings...", { id: 'sync-status' });
     
     // 1. Fetch Standings (Wins/Losses)
     const standingsRes = await fetch("https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=2026&standingsTypes=regularSeason");
     const standingsData = await standingsRes.json();
     
-    // 2. Fetch ALL Team Hitting (Bulk)
-    const hitRes = await fetch("https://statsapi.mlb.com/api/v1/stats?stats=season&group=hitting&sportId=1&season=2026");
-    const hitData = await hitRes.json();
-
-    // 3. Fetch ALL Team Pitching (Bulk)
-    const pitchRes = await fetch("https://statsapi.mlb.com/api/v1/stats?stats=season&group=pitching&sportId=1&season=2026");
-    const pitchData = await pitchRes.json();
-    
     if (!standingsData.records || standingsData.records.length === 0) {
       throw new Error("No standings records found in MLB API for 2026.");
     }
 
+    if (showToasts) toast.loading("Fetching Team Performance Data...", { id: 'sync-status' });
+
     const teamStatsMap: Record<string, any> = {};
 
-    // Process Standings
+    // Process Standings for basic info
     standingsData.records.forEach((record: any) => {
       record.teamRecords?.forEach((tr: any) => {
         const tid = tr.team.id.toString();
@@ -422,22 +421,31 @@ export default function Admin() {
       });
     });
 
-    // Process Bulk Hitting
-    hitData.stats?.[0]?.splits?.forEach((split: any) => {
-      const tid = split.team.id.toString();
-      if (teamStatsMap[tid]) {
-        teamStatsMap[tid].hrs = split.stat.homeRuns || 0;
-        teamStatsMap[tid].stolenBases = split.stat.stolenBases || 0;
-      }
-    });
+    // 2. Fetch Team-Level Stats for each team (Parallel)
+    // This is the most accurate way to get official team totals
+    await Promise.all(MLB_TEAMS.map(async (team) => {
+      try {
+        const tid = team.id.toString();
+        
+        // Fetch Team Hitting Season Stats
+        const hitRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=season&group=hitting&season=2026&gameType=R`);
+        const hitData = await hitRes.json();
+        const hitStat = hitData.stats?.[0]?.splits?.[0]?.stat;
+        
+        // Fetch Team Pitching Season Stats
+        const pitchRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=season&group=pitching&season=2026&gameType=R`);
+        const pitchData = await pitchRes.json();
+        const pitchStat = pitchData.stats?.[0]?.splits?.[0]?.stat;
 
-    // Process Bulk Pitching
-    pitchData.stats?.[0]?.splits?.forEach((split: any) => {
-      const tid = split.team.id.toString();
-      if (teamStatsMap[tid]) {
-        teamStatsMap[tid].ks = split.stat.strikeOuts || 0;
+        if (teamStatsMap[tid]) {
+          teamStatsMap[tid].hrs = hitStat?.homeRuns || 0;
+          teamStatsMap[tid].stolenBases = hitStat?.stolenBases || 0;
+          teamStatsMap[tid].ks = pitchStat?.strikeOuts || 0;
+        }
+      } catch (err) {
+        console.error(`Error fetching detailed stats for team ${team.name}:`, err);
       }
-    });
+    }));
 
     if (showToasts) toast.loading("Updating database...", { id: 'sync-status' });
     
@@ -460,7 +468,7 @@ export default function Admin() {
     }
 
     await batch.commit();
-    if (showToasts) toast.success(`Sync successful! ${updatedCount} teams updated in record time.`, { id: 'sync-status' });
+    if (showToasts) toast.success(`Sync successful! ${updatedCount} teams updated with official totals.`, { id: 'sync-status' });
     return updatedCount;
   };
 
@@ -558,7 +566,7 @@ export default function Admin() {
           team_name: team.name,
           abbreviation: team.abbr,
           ou_line: DEFAULT_LINES[team.id] || 81.0,
-          stats: { wins: 0, losses: 0, hrs: 0, ks: 0 },
+          stats: { wins: 0, losses: 0, hrs: 0, ks: 0, stolenBases: 0 },
           last_sync: new Date().toISOString()
         });
       });
@@ -1174,6 +1182,58 @@ export default function Admin() {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Team Data Verification Table */}
+      <div className="bg-white rounded-2xl p-6 md:p-8 border-4 border-slate-900 shadow-xl mt-12 mb-8">
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <RefreshCw className="text-blue-600 h-8 w-8" />
+            <div>
+              <h2 className="text-xl font-varsity text-slate-900 uppercase tracking-tight">Team Data Verification</h2>
+              <p className="text-[10px] font-varsity text-slate-500 uppercase tracking-widest opacity-70">
+                Raw season totals currently stored in the database.
+              </p>
+            </div>
+          </div>
+          <div className="hidden md:block px-3 py-1 bg-slate-100 rounded-lg border border-slate-200 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+            Last Sync: {teamLines[0]?.last_sync ? new Date(teamLines[0].last_sync).toLocaleTimeString() : 'N/A'}
+          </div>
+        </div>
+        
+        <div className="overflow-x-auto -mx-6 md:mx-0">
+          <table className="w-full text-left border-collapse min-w-[600px]">
+            <thead>
+              <tr className="border-b-2 border-slate-200 text-[10px] uppercase font-varsity tracking-widest text-slate-400">
+                <th className="py-3 px-4">Team</th>
+                <th className="py-3 px-4 text-center">Wins</th>
+                <th className="py-3 px-4 text-center">Losses</th>
+                <th className="py-3 px-4 text-center text-rose-600">HRs</th>
+                <th className="py-3 px-4 text-center text-amber-600">Ks</th>
+                <th className="py-3 px-4 text-center text-emerald-600">SBs</th>
+                <th className="py-3 px-4 text-right">O/U Line</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {teamLines.map((team) => (
+                <tr key={team.id} className="hover:bg-slate-50 transition-colors group">
+                  <td className="py-3 px-4">
+                    <div className="flex flex-col">
+                      <span className="font-varsity text-slate-900 group-hover:text-blue-600 transition-colors uppercase tracking-tight">{team.team_name}</span>
+                      <span className="text-[10px] text-slate-400 font-varsity uppercase tracking-widest">{team.abbreviation}</span>
+                    </div>
+                  </td>
+                  <td className="py-3 px-4 text-center font-scorebook text-slate-600">{team.stats?.wins || 0}</td>
+                  <td className="py-3 px-4 text-center font-scorebook text-slate-400">{team.stats?.losses || 0}</td>
+                  <td className="py-3 px-4 text-center font-scorebook text-rose-600 font-bold">{team.stats?.hrs || 0}</td>
+                  <td className="py-3 px-4 text-center font-scorebook text-amber-600">{team.stats?.ks || 0}</td>
+                  <td className="py-3 px-4 text-center font-scorebook text-emerald-600">{team.stats?.stolenBases || 0}</td>
+                  <td className="py-3 px-4 text-right font-varsity text-slate-400 text-xs">{team.ou_line}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
