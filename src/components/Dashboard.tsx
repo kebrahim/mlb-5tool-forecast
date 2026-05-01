@@ -1055,7 +1055,7 @@ export default function Dashboard() {
                                                 <div className="text-lg font-varsity text-blue-600 tabular-nums tracking-tighter">
                                                   {entry.score}
                                                 </div>
-                                                {cp > 0 && (
+                                                {cp > 0 && activeContest.points_awarded && (
                                                   <div className="px-2 py-0.5 bg-amber-500 text-amber-950 text-[8px] font-black rounded-lg">
                                                     +{cp} CP
                                                   </div>
@@ -1122,7 +1122,7 @@ export default function Dashboard() {
                                             </div>
 
                                             <div className="hidden md:flex col-span-2 flex-col items-end">
-                                              {cp > 0 ? (
+                                              {cp > 0 && activeContest.points_awarded ? (
                                                 <>
                                                   <div className="text-2xl font-varsity text-amber-600 tabular-nums tracking-tighter">
                                                     +{cp}
