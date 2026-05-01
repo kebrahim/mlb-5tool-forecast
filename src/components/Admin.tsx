@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db, auth } from '../firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { doc, setDoc, updateDoc, collection, writeBatch, onSnapshot, getDocs, deleteDoc, query, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, collection, writeBatch, onSnapshot, getDocs, deleteDoc, query, Timestamp, increment } from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
 import { Database, ShieldCheck, AlertCircle, Clock, RefreshCw, Power, ListOrdered, Play, Trash2, UserMinus, Mail, Search, Trophy } from 'lucide-react';
 import { MLB_TEAMS, DEFAULT_LINES } from '../mlbData';
@@ -24,6 +24,56 @@ export default function Admin() {
   const [teamLines, setTeamLines] = useState<any[]>([]);
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
   const [editLineValue, setEditLineValue] = useState<string>('');
+  const [selectedContestForPoints, setSelectedContestForPoints] = useState<string>('');
+  const [contestEntries, setContestEntries] = useState<any[]>([]);
+  const [rewardPoints, setRewardPoints] = useState<Record<number, number>>({ 0: 9, 1: 6, 2: 3, 3: 0, 4: 0 });
+  const [distributing, setDistributing] = useState(false);
+  const [payoutConfirming, setPayoutConfirming] = useState(false);
+
+  enum OperationType {
+    CREATE = 'create',
+    UPDATE = 'update',
+    DELETE = 'delete',
+    LIST = 'list',
+    GET = 'get',
+    WRITE = 'write',
+  }
+
+  interface FirestoreErrorInfo {
+    error: string;
+    operationType: OperationType;
+    path: string | null;
+    authInfo: {
+      userId?: string | null;
+      email?: string | null;
+      emailVerified?: boolean | null;
+      isAnonymous?: boolean | null;
+    }
+  }
+
+  const handleFirestoreError = (error: unknown, operationType: OperationType, path: string | null) => {
+    const errInfo: FirestoreErrorInfo = {
+      error: error instanceof Error ? error.message : String(error),
+      authInfo: {
+        userId: auth.currentUser?.uid,
+        email: auth.currentUser?.email,
+        emailVerified: auth.currentUser?.emailVerified,
+        isAnonymous: auth.currentUser?.isAnonymous,
+      },
+      operationType,
+      path
+    };
+    console.error('Firestore Error: ', JSON.stringify(errInfo));
+    toast.error(`Permission Error: ${operationType} on ${path}. Check console for details.`);
+    throw new Error(JSON.stringify(errInfo));
+  };
+
+  const parseDate = (date: any): Date => {
+    if (!date) return new Date();
+    if (date.toDate && typeof date.toDate === 'function') return date.toDate();
+    if (date instanceof Timestamp) return date.toDate();
+    return new Date(date);
+  };
 
   useEffect(() => {
     const unsubContests = onSnapshot(collection(db, 'contests'), (snap) => {
@@ -66,8 +116,8 @@ export default function Admin() {
         c.metric_key !== 'wins' && 
         !c.starting_stats && 
         c.start_time &&
-        (typeof c.start_time === 'string' ? new Date(c.start_time) : (c.start_time as any).toDate()).getTime() <= now.getTime() &&
-        (typeof c.end_time === 'string' ? new Date(c.end_time) : (c.end_time as any).toDate()).getTime() > now.getTime()
+        parseDate(c.start_time).getTime() <= now.getTime() &&
+        parseDate(c.end_time).getTime() > now.getTime()
       );
 
       if (contestsToSnapshot.length > 0 && !syncing) {
@@ -82,7 +132,7 @@ export default function Admin() {
             toast.loading(`Capturing historical baseline for ${contest.theme_name}...`, { id: 'auto-snap' });
             
             // Calculate the day before the contest starts
-            const startDate = contest.start_time instanceof Timestamp ? contest.start_time.toDate() : new Date(contest.start_time);
+            const startDate = parseDate(contest.start_time);
             const baselineDate = new Date(startDate);
             baselineDate.setDate(baselineDate.getDate() - 1);
             const dateStr = baselineDate.toISOString().split('T')[0];
@@ -123,6 +173,90 @@ export default function Admin() {
       checkAutoSnapshots();
     }
   }, [contests, syncing]);
+
+  useEffect(() => {
+    if (selectedContestForPoints) {
+      const q = query(collection(db, 'contests', selectedContestForPoints, 'entries'));
+      const unsubEntries = onSnapshot(q, (snap) => {
+        const contest = contests.find(c => c.id === selectedContestForPoints);
+        if (!contest) return;
+
+        const entries = snap.docs.map(d => ({ uid: d.id, ...d.data() } as any));
+        const scored = entries.map(entry => {
+          let score = 0;
+          entry.selections.forEach((sel: any) => {
+            const team = teamLines.find(t => t.id === sel.team_id);
+            if (team) {
+              if (contest.metric_key === 'wins') {
+                const gamesRemaining = 162 - (team.stats.wins + team.stats.losses);
+                const isClinched = sel.side === 'over' 
+                  ? team.stats.wins > team.ou_line 
+                  : (team.stats.wins + gamesRemaining) < team.ou_line;
+                if (isClinched) score += (contest.use_chips ? (sel.chips || 0) : 1);
+              } else {
+                const val = team.stats[contest.metric_key as keyof typeof team.stats] || 0;
+                const startVal = contest.starting_stats?.[team.id] || 0;
+                score += Math.max(0, val - startVal);
+              }
+            }
+          });
+          return { ...entry, score };
+        }).sort((a, b) => b.score - a.score);
+        
+        // Calculate ranks with ties
+        let currentRank = 0;
+        const ranked = scored.map((entry, index) => {
+          if (index > 0 && entry.score < scored[index - 1].score) {
+            currentRank = index;
+          }
+          return { ...entry, rank: currentRank };
+        });
+        
+        setContestEntries(ranked);
+      });
+      return () => unsubEntries();
+    } else {
+      setContestEntries([]);
+    }
+  }, [selectedContestForPoints, contests, teamLines]);
+
+  const awardPoints = async () => {
+    if (!selectedContestForPoints || contestEntries.length === 0) return;
+    
+    const contest = contests.find(c => c.id === selectedContestForPoints);
+    if (!contest) return;
+
+    setDistributing(true);
+    try {
+      const batch = writeBatch(db);
+      let awardedCount = 0;
+      
+      // Award to the list
+      contestEntries.forEach((entry) => {
+        const points = rewardPoints[entry.rank] || 0;
+        if (points > 0) {
+          batch.update(doc(db, 'users', entry.uid), {
+            total_cp: increment(points)
+          });
+          awardedCount++;
+        }
+      });
+
+      // Mark contest as awarded
+      batch.update(doc(db, 'contests', selectedContestForPoints), {
+        points_awarded: true,
+        awarded_at: new Date().toISOString()
+      });
+
+      await batch.commit();
+      toast.success(`Distributed CP to ${awardedCount} contestants!`);
+      setPayoutConfirming(false);
+    } catch (error: any) {
+      handleFirestoreError(error, OperationType.WRITE, `contests/${selectedContestForPoints}/payout`);
+    } finally {
+      setDistributing(false);
+    }
+  };
 
   const generateDraftOrder = async (contestId: string) => {
     const contest = contests.find(c => c.id === contestId);
@@ -281,7 +415,7 @@ export default function Admin() {
       setSyncing(true);
       
       // Calculate the day before the contest starts for the baseline
-      const startDate = contest.start_time instanceof Timestamp ? contest.start_time.toDate() : new Date(contest.start_time);
+      const startDate = parseDate(contest.start_time);
       const baselineDate = new Date(startDate);
       baselineDate.setDate(baselineDate.getDate() - 1);
       const dateStr = baselineDate.toISOString().split('T')[0];
@@ -901,6 +1035,146 @@ export default function Admin() {
         </div>
       </div>
 
+      {/* Champ Points Distribution */}
+      <div className="bg-slate-950 rounded-2xl p-6 md:p-8 border border-slate-800 shadow-xl mb-12">
+        <div className="flex items-center gap-3 mb-8">
+          <Trophy className="text-amber-500 w-8 h-8" />
+          <div>
+            <h2 className="text-xl font-varsity text-white uppercase tracking-tight">Champ Points Distribution</h2>
+            <p className="text-[10px] font-varsity text-slate-500 uppercase tracking-widest opacity-70">
+              Reward top finishers for completed contests.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="space-y-6">
+            <div>
+              <label className="text-[10px] font-varsity text-slate-500 uppercase tracking-widest block mb-2">Select Completed Contest</label>
+              <select 
+                value={selectedContestForPoints}
+                onChange={(e) => setSelectedContestForPoints(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-amber-500 transition-colors"
+              >
+                <option value="">-- Choose Contest --</option>
+                {contests.filter(c => parseDate(c.end_time) <= new Date()).map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.theme_name} {(c as any).points_awarded ? '✅' : '❌'}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {selectedContestForPoints && (
+              <div className="space-y-4">
+                <label className="text-[10px] font-varsity text-slate-500 uppercase tracking-widest block mb-2">CP Payout Structure</label>
+                {[0, 1, 2, 3, 4].map(idx => (
+                  <div key={idx} className="flex items-center gap-3">
+                    <span className="w-8 h-8 rounded bg-slate-800 flex items-center justify-center text-[10px] font-varsity text-slate-400">
+                      #{idx + 1}
+                    </span>
+                    <input 
+                      type="number"
+                      value={rewardPoints[idx] || 0}
+                      onChange={(e) => setRewardPoints({ ...rewardPoints, [idx]: parseInt(e.target.value) || 0 })}
+                      className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs font-bold text-blue-400"
+                    />
+                    <span className="text-[10px] font-varsity text-slate-600 uppercase tracking-widest">CP</span>
+                  </div>
+                ))}
+                
+                {!payoutConfirming ? (
+                  <button
+                    onClick={() => {
+                      const contest = contests.find(c => c.id === selectedContestForPoints);
+                      if (contest && (contest as any).points_awarded) {
+                        toast.error("Warning: Points already awarded for this contest.");
+                      }
+                      setPayoutConfirming(true);
+                    }}
+                    disabled={contestEntries.length === 0}
+                    className="w-full py-4 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-varsity uppercase tracking-widest text-xs rounded-xl shadow-[0_4px_0_0_rgb(180,134,8)] active:translate-y-0.5 active:shadow-none transition-all mt-4"
+                  >
+                    {contestEntries.length === 0 ? 'No Entries Found' : 'Preview Payouts'}
+                  </button>
+                ) : (
+                  <div className="flex flex-col gap-2 mt-4">
+                    <button
+                      onClick={awardPoints}
+                      disabled={distributing}
+                      className="w-full py-4 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white font-varsity uppercase tracking-widest text-xs rounded-xl shadow-[0_4px_0_0_rgb(5,150,105)] active:translate-y-0.5 active:shadow-none transition-all"
+                    >
+                      {distributing ? 'Distributing...' : 'Confirm & Payout CP'}
+                    </button>
+                    <button
+                      onClick={() => setPayoutConfirming(false)}
+                      disabled={distributing}
+                      className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 font-varsity uppercase tracking-widest text-[10px] rounded-lg transition-all"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="lg:col-span-2 bg-slate-900/50 rounded-2xl border border-slate-800 overflow-hidden">
+            <div className="p-4 border-b border-slate-800 bg-slate-900/80 flex justify-between items-center">
+              <span className="text-[10px] font-varsity text-slate-400 uppercase tracking-widest">Final Standings Audit</span>
+              <span className="px-2 py-0.5 bg-slate-800 rounded text-[10px] font-mono text-slate-500 uppercase tracking-widest">
+                {contestEntries.length} Entries
+              </span>
+            </div>
+            
+            <div className="max-h-[400px] overflow-y-auto no-scrollbar">
+              {contestEntries.length > 0 ? (
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="text-[8px] uppercase font-varsity tracking-widest text-slate-500 border-b border-slate-800">
+                      <th className="py-2 px-4">Rank</th>
+                      <th className="py-2 px-4">User</th>
+                      <th className="py-2 px-4">Score</th>
+                      <th className="py-2 px-4 text-right">Award</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/50">
+                    {contestEntries.map((entry) => {
+                      const user = users.find(u => u.uid === entry.uid);
+                      const cp = rewardPoints[entry.rank] || 0;
+                      return (
+                        <tr key={entry.uid} className="hover:bg-slate-800/30 transition-colors">
+                          <td className="py-2 px-4 font-mono text-slate-500 text-xs">#{entry.rank + 1}</td>
+                          <td className="py-2 px-4">
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-white uppercase tracking-tight">{user?.display_name || 'Unknown'}</span>
+                              <span className="text-[8px] text-slate-500 uppercase tracking-widest">{user?.email || 'N/A'}</span>
+                            </div>
+                          </td>
+                          <td className="py-2 px-4 font-mono text-blue-400 text-xs">{entry.score}</td>
+                          <td className="py-2 px-4 text-right">
+                            {cp > 0 && (
+                              <span className="px-2 py-0.5 bg-amber-500/10 text-amber-500 text-[10px] font-black rounded uppercase">
+                                +{cp} CP
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="p-12 text-center">
+                  <div className="text-3xl mb-4 opacity-20">🏆</div>
+                  <p className="text-xs font-varsity text-slate-600 uppercase tracking-[0.2em]">Select a contest to view results</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 gap-4 mb-8">
         <div className="p-4 md:p-6 bg-slate-950 rounded-2xl border border-slate-800">
           <div className="flex items-center justify-between mb-8">
@@ -1021,7 +1295,7 @@ export default function Admin() {
                           <div>
                             <p className="text-[7px] uppercase text-slate-500 tracking-widest font-bold">Starts</p>
                             <p className="text-[10px] font-mono text-slate-300">
-                               {c.start_time instanceof Timestamp ? c.start_time.toDate().toLocaleString() : new Date(c.start_time).toLocaleString()}
+                               {parseDate(c.start_time).toLocaleString()}
                             </p>
                           </div>
                        </div>
@@ -1032,7 +1306,7 @@ export default function Admin() {
                           <div>
                             <p className="text-[7px] uppercase text-slate-500 tracking-widest font-bold">Ends</p>
                             <p className="text-[10px] font-mono text-slate-300">
-                               {c.end_time instanceof Timestamp ? c.end_time.toDate().toLocaleString() : new Date(c.end_time).toLocaleString()}
+                               {parseDate(c.end_time).toLocaleString()}
                             </p>
                           </div>
                        </div>
@@ -1043,8 +1317,8 @@ export default function Admin() {
                         <button
                           onClick={() => {
                             setEditingContestId(c.id);
-                            setEditStartTime(c.start_time instanceof Timestamp ? c.start_time.toDate().toISOString() : c.start_time);
-                            setEditEndTime(c.end_time instanceof Timestamp ? c.end_time.toDate().toISOString() : c.end_time);
+                            setEditStartTime(parseDate(c.start_time).toISOString());
+                            setEditEndTime(parseDate(c.end_time).toISOString());
                             setEditDescription(c.description || '');
                             setEditTitle(c.theme_name);
                             setEditMetric(c.metric_key);
@@ -1067,6 +1341,11 @@ export default function Admin() {
                             <RefreshCw size={14} className={c.starting_stats ? '' : 'animate-pulse text-amber-500'} />
                             {c.starting_stats ? 'Stat Snapshot Verified' : 'Take Start Snapshot'}
                           </button>
+                        )}
+                        {c.starting_stats && (
+                          <span className="text-[10px] text-emerald-500 font-mono">
+                            ({Object.keys(c.starting_stats).length} teams tracked)
+                          </span>
                         )}
                     </div>
 

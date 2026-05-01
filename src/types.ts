@@ -38,6 +38,7 @@ export interface Contest {
   current_turn_index?: number;
   draft_status?: 'pending' | 'in_progress' | 'completed';
   starting_stats?: Record<string, number>;
+  points_awarded?: boolean;
 }
 
 export interface Selection {
@@ -51,6 +52,7 @@ export interface Entry {
   uid: string;
   selections: Selection[];
   score: number;
+  rank?: number;
   is_valid: boolean;
   last_updated: string;
 }

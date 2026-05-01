@@ -244,7 +244,7 @@ export default function Dashboard() {
   const sortedEntries = useMemo(() => {
     if (!activeContest || teams.length === 0) return [];
     
-    return allEntries.map(entry => {
+    const scored = allEntries.map(entry => {
       let score = 0;
       const now = new Date();
       const isStarted = parseDate(activeContest.start_time) <= now;
@@ -271,6 +271,15 @@ export default function Dashboard() {
       });
       return { ...entry, score };
     }).sort((a, b) => b.score - a.score);
+
+    // Calculate ranks with ties
+    let currentRank = 0;
+    return scored.map((entry, index) => {
+      if (index > 0 && entry.score < scored[index - 1].score) {
+        currentRank = index;
+      }
+      return { ...entry, rank: currentRank };
+    });
   }, [allEntries, teams, activeContest]);
 
   const getContestStatus = (c: Contest) => {
@@ -306,6 +315,11 @@ export default function Dashboard() {
     };
 
     return { ...configs[statusIdentifier], statusType: statusIdentifier };
+  };
+
+  const getCPForRank = (rank: number) => {
+    const points = [9, 6, 3, 0, 0];
+    return points[rank] || 0;
   };
 
   return (
@@ -1008,17 +1022,19 @@ export default function Dashboard() {
 
                                   <div className="bg-scorebook rounded-[1.5rem] md:rounded-[2rem] border-4 border-stitch overflow-hidden shadow-xl">
                                     <div className="grid grid-cols-12 px-4 md:px-8 py-4 bg-slate-50 border-b-2 border-slate-200 text-[8px] md:text-[10px] font-varsity text-slate-500 uppercase tracking-widest">
-                                      <div className="col-span-2 md:col-span-1">Rank</div>
-                                      <div className="col-span-6 md:col-span-3">Contestant</div>
-                                      <div className="hidden md:block col-span-6">Selections & Records</div>
-                                      <div className="col-span-4 md:col-span-2 text-right">Score</div>
+                                      <div className="col-span-1">Rank</div>
+                                      <div className="col-span-3">Contestant</div>
+                                      <div className="hidden md:block col-span-5">Selections & Records</div>
+                                      <div className="col-span-1 text-right">Score</div>
+                                      <div className="col-span-2 text-right">CP</div>
                                     </div>
                                     <div className="divide-y-8 divide-slate-200/80">
                                       {sortedEntries.map((entry, idx) => {
                                         const player = leaderboard.find(p => p.uid === entry.uid);
                                         if (!player) return null;
                                         
-                                        const rank = sortedEntries.findIndex(e => e.score === entry.score) + 1;
+                                        const rank = entry.rank + 1;
+                                        const cp = getCPForRank(entry.rank);
 
                                         return (
                                           <div key={entry.uid} className="flex flex-col md:grid md:grid-cols-12 px-4 md:px-8 py-4 md:py-6 md:items-center hover:bg-blue-50/50 transition-colors group gap-4 md:gap-0">
@@ -1035,17 +1051,19 @@ export default function Dashboard() {
                                                 </div>
                                               </div>
 
-                                              <div className="md:hidden ml-auto text-right">
+                                              <div className="md:hidden ml-auto text-right flex flex-col items-end">
                                                 <div className="text-lg font-varsity text-blue-600 tabular-nums tracking-tighter">
                                                   {entry.score}
                                                 </div>
-                                                <div className="text-[8px] font-varsity text-slate-500 uppercase tracking-widest">
-                                                  {formatMetric(activeContest.metric_key)}
-                                                </div>
+                                                {cp > 0 && (
+                                                  <div className="px-2 py-0.5 bg-amber-500 text-amber-950 text-[8px] font-black rounded-lg">
+                                                    +{cp} CP
+                                                  </div>
+                                                )}
                                               </div>
                                             </div>
 
-                                            <div className="col-span-6">
+                                            <div className="col-span-5">
                                               <div className="flex flex-wrap gap-2 justify-center md:justify-start">
                                                 {[...entry.selections].sort((a, b) => (b.chips || 0) - (a.chips || 0)).map(sel => {
                                                   const team = teams.find(t => t.id === sel.team_id);
@@ -1094,13 +1112,29 @@ export default function Dashboard() {
                                               </div>
                                             </div>
 
-                                            <div className="hidden md:block col-span-2 text-right">
+                                            <div className="hidden md:block col-span-1 text-right">
                                               <div className="text-2xl font-varsity text-blue-600 tabular-nums tracking-tighter">
                                                 {entry.score}
                                               </div>
                                               <div className="text-[10px] font-varsity text-slate-500 uppercase tracking-widest">
                                                 {formatMetric(activeContest.metric_key)}
                                               </div>
+                                            </div>
+
+                                            <div className="hidden md:flex col-span-2 flex-col items-end">
+                                              {cp > 0 ? (
+                                                <>
+                                                  <div className="text-2xl font-varsity text-amber-600 tabular-nums tracking-tighter">
+                                                    +{cp}
+                                                  </div>
+                                                  <div className="flex items-center gap-1">
+                                                    <Trophy size={10} className="text-amber-500" />
+                                                    <span className="text-[10px] font-varsity text-amber-500 uppercase tracking-widest">CP Won</span>
+                                                  </div>
+                                                </>
+                                              ) : (
+                                                <span className="text-[10px] font-varsity text-slate-400 uppercase tracking-widest">---</span>
+                                              )}
                                             </div>
                                           </div>
                                         );
@@ -1177,17 +1211,19 @@ export default function Dashboard() {
 
                     <div className="bg-scorebook rounded-[1.5rem] md:rounded-[2rem] border-4 border-stitch overflow-hidden shadow-xl">
                       <div className="grid grid-cols-12 px-4 md:px-8 py-4 bg-slate-50 border-b-2 border-slate-200 text-[8px] md:text-[10px] font-varsity text-slate-500 uppercase tracking-widest">
-                        <div className="col-span-2 md:col-span-1">Rank</div>
-                        <div className="col-span-6 md:col-span-3">Contestant</div>
-                        <div className="hidden md:block col-span-6">Selections & Records</div>
-                        <div className="col-span-4 md:col-span-2 text-right">Score</div>
+                        <div className="col-span-1">Rank</div>
+                        <div className="col-span-3">Contestant</div>
+                        <div className="hidden md:block col-span-5">Selections & Records</div>
+                        <div className="col-span-1 text-right">Score</div>
+                        <div className="col-span-2 text-right">CP</div>
                       </div>
                       <div className="divide-y-8 divide-slate-200/80">
                         {sortedEntries.map((entry, idx) => {
                           const player = leaderboard.find(p => p.uid === entry.uid);
                           if (!player) return null;
                           
-                          const rank = sortedEntries.findIndex(e => e.score === entry.score) + 1;
+                          const rank = entry.rank + 1;
+                          const cp = getCPForRank(entry.rank);
 
                           return (
                             <div key={entry.uid} className="flex flex-col md:grid md:grid-cols-12 px-4 md:px-8 py-4 md:py-6 md:items-center hover:bg-blue-50/50 transition-colors group gap-4 md:gap-0">
@@ -1204,17 +1240,19 @@ export default function Dashboard() {
                                   </div>
                                 </div>
 
-                                <div className="md:hidden ml-auto text-right">
+                                <div className="md:hidden ml-auto text-right flex flex-col items-end">
                                   <div className="text-lg font-varsity text-blue-600 tabular-nums tracking-tighter">
                                     {entry.score}
                                   </div>
-                                  <div className="text-[8px] font-varsity text-slate-400 uppercase tracking-widest">
-                                    {formatMetric(activeContest.metric_key)}
-                                  </div>
+                                  {cp > 0 && (
+                                    <div className="px-2 py-0.5 bg-amber-500 text-amber-950 text-[8px] font-black rounded-lg">
+                                      +{cp} CP
+                                    </div>
+                                  )}
                                 </div>
                               </div>
 
-                              <div className="col-span-6 flex flex-wrap gap-2 justify-center md:justify-start">
+                              <div className="col-span-5 flex flex-wrap gap-2 justify-center md:justify-start">
                                 {entry.selections.map(sel => {
                                   const team = teams.find(t => t.id === sel.team_id);
                                   if (!team) return null;
@@ -1242,13 +1280,29 @@ export default function Dashboard() {
                                 })}
                               </div>
 
-                              <div className="hidden md:block col-span-2 text-right">
+                              <div className="hidden md:block col-span-1 text-right">
                                 <div className="text-2xl font-varsity text-blue-600 tabular-nums tracking-tighter">
                                   {entry.score}
                                 </div>
                                 <div className="text-[10px] font-varsity text-slate-400 uppercase tracking-widest">
                                   {formatMetric(activeContest.metric_key)}
                                 </div>
+                              </div>
+
+                              <div className="hidden md:flex col-span-2 flex-col items-end">
+                                {cp > 0 ? (
+                                  <>
+                                    <div className="text-2xl font-varsity text-amber-600 tabular-nums tracking-tighter">
+                                      +{cp}
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <Trophy size={10} className="text-amber-500" />
+                                      <span className="text-[10px] font-varsity text-amber-500 uppercase tracking-widest">CP Won</span>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <span className="text-[10px] font-varsity text-slate-400 uppercase tracking-widest">---</span>
+                                )}
                               </div>
                             </div>
                           );
