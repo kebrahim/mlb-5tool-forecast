@@ -253,17 +253,21 @@ export default function Dashboard() {
         const team = teams.find(t => t.id === sel.team_id);
         if (team) {
           if (activeContest.metric_key === 'wins') {
+            const endVal = activeContest.ending_stats?.[team.id];
+            const wins = endVal !== undefined ? endVal : team.stats.wins;
+            
             // For O/U, score is sum of chips for mathematically clinched picks
             const gamesRemaining = 162 - (team.stats.wins + team.stats.losses);
             const isClinched = sel.side === 'over' 
-              ? team.stats.wins > team.ou_line 
-              : (team.stats.wins + gamesRemaining) < team.ou_line;
+              ? wins > team.ou_line 
+              : (wins + gamesRemaining) < team.ou_line;
             if (isClinched) {
               score += (activeContest.use_chips ? (sel.chips || 0) : 1);
             }
           } else {
             // For total count contests (drafts), score is sum of metric values
-            const val = team.stats[activeContest.metric_key as keyof typeof team.stats] || 0;
+            const endVal = activeContest.ending_stats?.[team.id];
+            const val = endVal !== undefined ? endVal : (team.stats[activeContest.metric_key as keyof typeof team.stats] || 0);
             const startVal = activeContest.starting_stats?.[team.id] || 0;
             score += isStarted ? Math.max(0, val - startVal) : 0;
           }
@@ -904,7 +908,8 @@ export default function Dashboard() {
                                           if (!team) return null;
                                           
                                           if (activeContest.metric_key !== 'wins') {
-                                            const rawValue = team.stats[activeContest.metric_key as keyof typeof team.stats] || 0;
+                                            const endVal = activeContest.ending_stats?.[team.id];
+                                            const rawValue = endVal !== undefined ? endVal : (team.stats[activeContest.metric_key as keyof typeof team.stats] || 0);
                                             const startValue = activeContest.starting_stats?.[team.id] || 0;
                                             const isStarted = parseDate(activeContest.start_time) <= new Date();
                                             const metricValue = isStarted ? Math.max(0, rawValue - startValue) : 0;
@@ -928,14 +933,16 @@ export default function Dashboard() {
                                             );
                                           }
 
-                                          const progress = (team.stats.wins / team.ou_line) * 100;
-                                          const gamesRemaining = 162 - (team.stats.wins + team.stats.losses);
+                                          const endVal = activeContest.ending_stats?.[team.id];
+                                          const wins = endVal !== undefined ? endVal : team.stats.wins;
+                                          const progress = (wins / team.ou_line) * 100;
+                                          const gamesRemaining = (activeContest.results_sealed || endVal !== undefined) ? 0 : (162 - (team.stats.wins + team.stats.losses));
                                           const isClinched = sel.side === 'over' 
-                                            ? team.stats.wins > team.ou_line 
-                                            : (team.stats.wins + gamesRemaining) < team.ou_line;
+                                            ? wins > team.ou_line 
+                                            : (wins + gamesRemaining) < team.ou_line;
                                           const isEliminated = sel.side === 'over'
-                                            ? (team.stats.wins + gamesRemaining) < team.ou_line
-                                            : team.stats.wins > team.ou_line;
+                                            ? (wins + gamesRemaining) < team.ou_line
+                                            : wins > team.ou_line;
 
                                           return (
                                             <div key={sel.team_id} className="bg-scorebook p-6 rounded-2xl border-2 border-slate-200 shadow-md group hover:border-[var(--color-stitch-red)] transition-all">
@@ -949,9 +956,9 @@ export default function Dashboard() {
                                                 </div>
                                                 <div className="text-right">
                                                   <div className={`text-2xl font-varsity tabular-nums tracking-tighter ${isClinched ? 'text-emerald-600' : isEliminated ? 'text-rose-600' : 'text-slate-400'}`}>
-                                                    {team.stats.wins} - {team.stats.losses}
+                                                    {wins}{endVal === undefined && ` - ${team.stats.losses}`}
                                                   </div>
-                                                  <div className="text-[10px] text-slate-500 uppercase tracking-widest font-varsity">Current Record</div>
+                                                  <div className="text-[10px] text-slate-500 uppercase tracking-widest font-varsity">{endVal !== undefined ? 'Final Result' : 'Current Record'}</div>
                                                 </div>
                                               </div>
                                               <div className="relative h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
@@ -1055,7 +1062,7 @@ export default function Dashboard() {
                                                 <div className="text-lg font-varsity text-blue-600 tabular-nums tracking-tighter">
                                                   {entry.score}
                                                 </div>
-                                                {cp > 0 && activeContest.points_awarded && (
+                                                {cp > 0 && activeContest.points_awarded && getContestStatus(activeContest).statusType === 'completed' && (
                                                   <div className="px-2 py-0.5 bg-amber-500 text-amber-950 text-[8px] font-black rounded-lg">
                                                     +{cp} CP
                                                   </div>
@@ -1068,16 +1075,17 @@ export default function Dashboard() {
                                                 {[...entry.selections].sort((a, b) => (b.chips || 0) - (a.chips || 0)).map(sel => {
                                                   const team = teams.find(t => t.id === sel.team_id);
                                                   if (!team) return null;
-                                                  const rawValue = team.stats[activeContest.metric_key as keyof typeof team.stats] || 0;
+                                                  const endVal = activeContest.ending_stats?.[team.id];
+                                                  const rawValue = endVal !== undefined ? endVal : (team.stats[activeContest.metric_key as keyof typeof team.stats] || 0);
                                                   const startValue = activeContest.starting_stats?.[team.id] || 0;
                                                   const isStarted = parseDate(activeContest.start_time) <= new Date();
                                                   const metricValue = activeContest.metric_key === 'wins' ? rawValue : (isStarted ? Math.max(0, rawValue - startValue) : 0);
-                                                  const gamesRemaining = 162 - (team.stats.wins + team.stats.losses);
+                                                  const gamesRemaining = (activeContest.results_sealed || endVal !== undefined) ? 0 : (162 - (team.stats.wins + team.stats.losses));
                                                   const isClinched = activeContest.metric_key === 'wins'
-                                                    ? (sel.side === 'over' ? team.stats.wins > team.ou_line : (team.stats.wins + gamesRemaining) < team.ou_line)
+                                                    ? (sel.side === 'over' ? rawValue > team.ou_line : (rawValue + gamesRemaining) < team.ou_line)
                                                     : false;
                                                   const isEliminated = activeContest.metric_key === 'wins'
-                                                    ? (sel.side === 'over' ? (team.stats.wins + gamesRemaining) < team.ou_line : team.stats.wins > team.ou_line)
+                                                    ? (sel.side === 'over' ? (rawValue + gamesRemaining) < team.ou_line : rawValue > team.ou_line)
                                                     : false;
 
                                                   return (
@@ -1100,7 +1108,7 @@ export default function Dashboard() {
                                                       <span className="w-px h-4 bg-slate-200" />
                                                       <div className="flex flex-col items-end leading-none">
                                                         <span className="text-xs md:text-sm font-varsity tabular-nums">
-                                                          {activeContest.metric_key === 'wins' ? `${team.stats.wins}-${team.stats.losses}` : metricValue}
+                                                          {activeContest.metric_key === 'wins' ? (endVal !== undefined ? rawValue : `${team.stats.wins}-${team.stats.losses}`) : metricValue}
                                                         </span>
                                                         {activeContest.use_chips && (
                                                           <span className="text-[8px] md:text-[9px] font-varsity opacity-70">{sel.chips}c</span>
@@ -1122,7 +1130,7 @@ export default function Dashboard() {
                                             </div>
 
                                             <div className="hidden md:flex col-span-2 flex-col items-end">
-                                              {cp > 0 && activeContest.points_awarded ? (
+                                              {cp > 0 && activeContest.points_awarded && getContestStatus(activeContest).statusType === 'completed' ? (
                                                 <>
                                                   <div className="text-2xl font-varsity text-amber-600 tabular-nums tracking-tighter">
                                                     +{cp}
@@ -1244,7 +1252,7 @@ export default function Dashboard() {
                                   <div className="text-lg font-varsity text-blue-600 tabular-nums tracking-tighter">
                                     {entry.score}
                                   </div>
-                                  {cp > 0 && (
+                                  {cp > 0 && getContestStatus(activeContest).statusType === 'completed' && (
                                     <div className="px-2 py-0.5 bg-amber-500 text-amber-950 text-[8px] font-black rounded-lg">
                                       +{cp} CP
                                     </div>
@@ -1256,12 +1264,14 @@ export default function Dashboard() {
                                 {entry.selections.map(sel => {
                                   const team = teams.find(t => t.id === sel.team_id);
                                   if (!team) return null;
+                                  const endVal = activeContest.ending_stats?.[team.id];
+                                  const rawValue = endVal !== undefined ? endVal : (team.stats[activeContest.metric_key as keyof typeof team.stats] || 0);
                                   const gamesRemaining = 162 - (team.stats.wins + team.stats.losses);
                                   const isClinched = activeContest.metric_key === 'wins'
-                                    ? (sel.side === 'over' ? team.stats.wins > team.ou_line : (team.stats.wins + gamesRemaining) < team.ou_line)
+                                    ? (sel.side === 'over' ? rawValue > team.ou_line : (rawValue + gamesRemaining) < team.ou_line)
                                     : false;
                                   const isEliminated = activeContest.metric_key === 'wins'
-                                    ? (sel.side === 'over' ? (team.stats.wins + gamesRemaining) < team.ou_line : team.stats.wins > team.ou_line)
+                                    ? (sel.side === 'over' ? (rawValue + gamesRemaining) < team.ou_line : rawValue > team.ou_line)
                                     : false;
 
                                   return (
@@ -1272,9 +1282,14 @@ export default function Dashboard() {
                                           {sel.side[0]} {team.ou_line} {isClinched && '✓'} {isEliminated && '✗'}
                                         </span>
                                       )}
-                                      <span className="text-xs md:text-sm font-varsity text-slate-600">
-                                        {activeContest.metric_key === 'wins' ? `${team.stats.wins}-${team.stats.losses}` : (parseDate(activeContest.start_time) <= new Date() ? Math.max(0, (team.stats[activeContest.metric_key as keyof typeof team.stats] || 0) - (activeContest.starting_stats?.[team.id] || 0)) : 0)}
-                                      </span>
+                                        <span className="text-xs md:text-sm font-varsity text-slate-600">
+                                          {(() => {
+                                            if (activeContest.metric_key === 'wins') {
+                                              return endVal !== undefined ? rawValue : `${team.stats.wins}-${team.stats.losses}`;
+                                            }
+                                            return parseDate(activeContest.start_time) <= new Date() ? Math.max(0, rawValue - (activeContest.starting_stats?.[team.id] || 0)) : 0;
+                                          })()}
+                                        </span>
                                     </div>
                                   );
                                 })}
@@ -1290,7 +1305,7 @@ export default function Dashboard() {
                               </div>
 
                               <div className="hidden md:flex col-span-2 flex-col items-end">
-                                {cp > 0 ? (
+                                {cp > 0 && getContestStatus(activeContest).statusType === 'completed' ? (
                                   <>
                                     <div className="text-2xl font-varsity text-amber-600 tabular-nums tracking-tighter">
                                       +{cp}
@@ -1381,7 +1396,8 @@ export default function Dashboard() {
                     if (!team) return null;
                     
                     if (activeContest.metric_key !== 'wins') {
-                      const rawValue = team.stats[activeContest.metric_key as keyof typeof team.stats] || 0;
+                      const endVal = activeContest.ending_stats?.[team.id];
+                      const rawValue = endVal !== undefined ? endVal : (team.stats[activeContest.metric_key as keyof typeof team.stats] || 0);
                       const startValue = activeContest.starting_stats?.[team.id] || 0;
                       const isStarted = parseDate(activeContest.start_time) <= new Date();
                       const metricValue = isStarted ? Math.max(0, rawValue - startValue) : 0;

@@ -3,7 +3,7 @@ import { db, auth } from '../firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { doc, setDoc, updateDoc, collection, writeBatch, onSnapshot, getDocs, deleteDoc, query, Timestamp, increment } from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
-import { Database, ShieldCheck, AlertCircle, Clock, RefreshCw, Power, ListOrdered, Play, Trash2, UserMinus, Mail, Search, Trophy } from 'lucide-react';
+import { Database, ShieldCheck, AlertCircle, Clock, RefreshCw, Power, ListOrdered, Play, Trash2, UserMinus, Mail, Search, Trophy, Lock, Wrench } from 'lucide-react';
 import { MLB_TEAMS, DEFAULT_LINES } from '../mlbData';
 import { UserProfile, Contest } from '../types';
 
@@ -14,6 +14,8 @@ export default function Admin() {
   const [contests, setContests] = useState<Contest[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [editingContestId, setEditingContestId] = useState<string | null>(null);
+  const [editingEndingStatsId, setEditingEndingStatsId] = useState<string | null>(null);
+  const [tempEndingStats, setTempEndingStats] = useState<Record<string, number>>({});
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
   const [editStartTime, setEditStartTime] = useState('');
@@ -441,6 +443,87 @@ export default function Admin() {
     } catch (error: any) {
       console.error("Manual snapshot error:", error);
       toast.error(error.message);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const snapshotEndingStats = async (contestId: string) => {
+    const contest = contests.find(c => c.id === contestId);
+    if (!contest) return;
+
+    try {
+      setSyncing(true);
+      
+      // Calculate the date the contest ended
+      const endDate = parseDate(contest.end_time);
+      const dateStr = endDate.toISOString().split('T')[0];
+
+      toast.loading(`Capturing final stats as of ${dateStr}...`, { id: 'final-snap' });
+      const historicalStats = await fetchMLBStatsForDate(dateStr, false);
+      
+      const statsMap: Record<string, number> = {};
+      MLB_TEAMS.forEach(team => {
+        const stats = historicalStats[team.id];
+        if (stats) {
+          statsMap[team.id] = stats[contest.metric_key as keyof typeof stats] || 0;
+        } else {
+          statsMap[team.id] = 0;
+        }
+      });
+
+      await updateDoc(doc(db, 'contests', contestId), {
+        ending_stats: statsMap,
+        results_sealed: true,
+        last_updated: new Date().toISOString()
+      });
+      
+      toast.success(`Final results sealed as of ${dateStr} for ${contest.theme_name}!`, { id: 'final-snap' });
+    } catch (error: any) {
+      console.error("Manual ending snapshot error:", error);
+      toast.error(error.message, { id: 'final-snap' });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const repairAprilStats = async (contestId: string) => {
+    const contest = contests.find(c => c.id === contestId);
+    if (!contest) return;
+
+    setEditingEndingStatsId(contestId);
+    
+    // Initialize with current ending_stats or starting_stats
+    const initialStats: Record<string, number> = {};
+    const currentEnding = contest.ending_stats || {};
+    const currentStarting = contest.starting_stats || {};
+    
+    MLB_TEAMS.forEach(team => {
+      // If ending_stats exist, use them. 
+      // If not, we might want to default to starting_stats + some value (like in the repair function)
+      // but let's just default to starting_stats if ending_stats don't exist yet
+      initialStats[team.id] = currentEnding[team.id] !== undefined ? currentEnding[team.id] : (currentStarting[team.id] || 0);
+    });
+    
+    setTempEndingStats(initialStats);
+  };
+
+  const saveEndingStats = async (contestId: string) => {
+    try {
+      setSyncing(true);
+      toast.loading('Saving manual stats...', { id: 'save-stats' });
+
+      await updateDoc(doc(db, 'contests', contestId), {
+        ending_stats: tempEndingStats,
+        results_sealed: true,
+        last_updated: new Date().toISOString()
+      });
+
+      toast.success('Stats updated and results sealed!', { id: 'save-stats' });
+      setEditingEndingStatsId(null);
+    } catch (error: any) {
+      console.error("Save stats error:", error);
+      toast.error(error.message, { id: 'save-stats' });
     } finally {
       setSyncing(false);
     }
@@ -1343,11 +1426,82 @@ export default function Admin() {
                           </button>
                         )}
                         {c.starting_stats && (
-                          <span className="text-[10px] text-emerald-500 font-mono">
-                            ({Object.keys(c.starting_stats).length} teams tracked)
+                          <span className="text-[10px] text-emerald-500 font-mono italic">
+                            (Stats Sync Active)
                           </span>
                         )}
+
+                        {c.metric_key !== 'wins' && parseDate(c.end_time) <= new Date() && (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => snapshotEndingStats(c.id)}
+                              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-2 border ${
+                                c.ending_stats 
+                                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-500' 
+                                  : 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-900/20'
+                              }`}
+                            >
+                              <Lock size={14} className={c.ending_stats ? '' : 'animate-bounce'} />
+                              {c.ending_stats ? 'Results Sealed' : 'Seal Final Results'}
+                            </button>
+
+                            <button
+                              onClick={() => repairAprilStats(c.id)}
+                              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-slate-400 rounded-lg transition-all flex items-center gap-2 border border-slate-700"
+                              title="Manual Correction"
+                            >
+                              <Wrench size={14} />
+                              Manual Edit Stats
+                            </button>
+                          </div>
+                        )}
                     </div>
+
+                    {/* Manual Stats Editor */}
+                    {editingEndingStatsId === c.id && (
+                      <div className="bg-slate-950 p-6 rounded-2xl border-2 border-blue-500/30 shadow-2xl mb-4 animate-in fade-in slide-in-from-top-4">
+                        <div className="flex items-center justify-between mb-4">
+                          <div>
+                            <h4 className="font-varsity text-sm text-white uppercase tracking-tight">Manual Ending Stats Editor</h4>
+                            <p className="text-[10px] font-varsity text-slate-500 uppercase tracking-widest">Enter the final RAW totals for each team</p>
+                          </div>
+                          <div className="flex gap-2">
+                             <button
+                                onClick={() => setEditingEndingStatsId(null)}
+                                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-[10px] font-bold rounded-lg text-slate-400"
+                             >
+                                Cancel
+                             </button>
+                             <button
+                                onClick={() => saveEndingStats(c.id)}
+                                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-[10px] font-bold rounded-lg text-white shadow-lg"
+                             >
+                                Save & Seal
+                             </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 max-h-[300px] overflow-y-auto pr-2 no-scrollbar">
+                          {MLB_TEAMS.map(team => (
+                            <div key={team.id} className="p-2 bg-slate-900 rounded-lg border border-slate-800">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[10px] font-bold text-slate-400">{team.abbr}</span>
+                                <span className="text-[8px] text-slate-600 uppercase font-bold">Start: {c.starting_stats?.[team.id] || 0}</span>
+                              </div>
+                              <input 
+                                type="number"
+                                value={tempEndingStats[team.id] || 0}
+                                onChange={(e) => setTempEndingStats({
+                                  ...tempEndingStats,
+                                  [team.id]: parseInt(e.target.value) || 0
+                                })}
+                                className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs font-bold text-blue-400 focus:border-blue-500 outline-none"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Draft Specific Card */}
                     {c.is_draft && (

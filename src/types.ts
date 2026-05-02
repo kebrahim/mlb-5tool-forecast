@@ -38,6 +38,7 @@ export interface Contest {
   current_turn_index?: number;
   draft_status?: 'pending' | 'in_progress' | 'completed';
   starting_stats?: Record<string, number>;
+  ending_stats?: Record<string, number>;
   points_awarded?: boolean;
 }
 

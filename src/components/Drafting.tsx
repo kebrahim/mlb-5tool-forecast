@@ -261,7 +261,13 @@ function SnakeDraftRoom({
                       {contest.metric_key === 'wins' ? 'O/U Line' : `${formatMetric(contest.metric_key)} Sprint`}
                     </span>
                     <span className="text-lg font-varsity text-blue-600 leading-none">
-                      {contest.metric_key === 'wins' ? team.ou_line : (parseDate(contest.start_time) <= new Date() ? Math.max(0, (team.stats[contest.metric_key as keyof typeof team.stats] || 0) - (contest.starting_stats?.[team.id] || 0)) : 0)}
+                      {(() => {
+                        if (contest.metric_key === 'wins') return team.ou_line;
+                        const endVal = contest.ending_stats?.[team.id];
+                        const rawValue = endVal !== undefined ? endVal : (team.stats[contest.metric_key as keyof typeof team.stats] || 0);
+                        const startValue = contest.starting_stats?.[team.id] || 0;
+                        return parseDate(contest.start_time) <= new Date() ? Math.max(0, rawValue - startValue) : 0;
+                      })()}
                     </span>
                   </div>
                 </div>
@@ -425,7 +431,13 @@ function SelectionRoom({
                       {contest.metric_key === 'wins' ? 'O/U Line' : `${formatMetric(contest.metric_key)}`}
                     </span>
                     <span className="text-base md:text-lg font-varsity text-blue-600 leading-none">
-                      {contest.metric_key === 'wins' ? team.ou_line : (parseDate(contest.start_time) <= new Date() ? Math.max(0, (team.stats[contest.metric_key as keyof typeof team.stats] || 0) - (contest.starting_stats?.[team.id] || 0)) : 0)}
+                      {(() => {
+                        if (contest.metric_key === 'wins') return team.ou_line;
+                        const endVal = contest.ending_stats?.[team.id];
+                        const rawValue = endVal !== undefined ? endVal : (team.stats[contest.metric_key as keyof typeof team.stats] || 0);
+                        const startValue = contest.starting_stats?.[team.id] || 0;
+                        return parseDate(contest.start_time) <= new Date() ? Math.max(0, rawValue - startValue) : 0;
+                      })()}
                     </span>
                   </div>
                 </div>
