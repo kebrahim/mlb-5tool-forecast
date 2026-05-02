@@ -684,19 +684,19 @@ export default function Dashboard() {
                         </div>
                         
                         <div className="bg-scorebook rounded-[1.5rem] md:rounded-[2.5rem] border-4 border-stitch overflow-hidden shadow-xl">
-                          <div className="grid grid-cols-12 px-4 md:px-8 py-3 md:py-4 bg-slate-100/50 border-b-2 border-slate-200 text-[8px] md:text-[10px] font-varsity text-slate-500 uppercase tracking-widest">
+                          <div className="grid grid-cols-12 px-4 md:px-6 py-2 md:py-2 bg-slate-100/50 border-b-2 border-slate-200 text-[8px] md:text-[10px] font-varsity text-slate-500 uppercase tracking-widest">
                             <div className="col-span-2 md:col-span-1">Rank</div>
                             <div className="col-span-6 md:col-span-7">Contestant</div>
                             <div className="col-span-4 text-right">Total CP</div>
                           </div>
-                          <div className="divide-y-8 divide-slate-200/80">
+                          <div className="divide-y-2 divide-slate-200/80">
                             {leaderboard.map((player, idx) => {
                               const rank = leaderboard.findIndex(p => p.total_cp === player.total_cp) + 1;
                               return (
                                 <div 
                                   key={player.uid}
                                   onClick={() => showRival(player)}
-                                  className="grid grid-cols-12 px-4 md:px-8 py-3 md:py-5 items-center hover:bg-blue-50/50 transition-colors group cursor-pointer"
+                                  className="grid grid-cols-12 px-4 md:px-6 py-2 md:py-3 items-center hover:bg-blue-50/50 transition-colors group cursor-pointer"
                                 >
                                   <div className="col-span-2 md:col-span-1 font-scorebook text-slate-500 text-xs md:text-sm">{rank}</div>
                                   <div className="col-span-6 md:col-span-7 flex items-center gap-3 md:gap-4">
@@ -1039,23 +1039,22 @@ export default function Dashboard() {
                                   </div>
 
                                   <div className="bg-scorebook rounded-[1.5rem] md:rounded-[2rem] border-4 border-stitch overflow-hidden shadow-xl">
-                                    <div className="grid grid-cols-12 px-4 md:px-8 py-4 bg-slate-50 border-b-2 border-slate-200 text-[8px] md:text-[10px] font-varsity text-slate-500 uppercase tracking-widest">
+                                    <div className="grid grid-cols-12 px-4 md:px-6 py-2 bg-slate-50 border-b-2 border-slate-200 text-[8px] md:text-[10px] font-varsity text-slate-500 uppercase tracking-widest">
                                       <div className="col-span-1">Rank</div>
                                       <div className="col-span-3">Contestant</div>
                                       <div className="hidden md:block col-span-5">Selections & Records</div>
-                                      <div className="col-span-1 text-right">Score</div>
-                                      <div className="col-span-2 text-right">CP</div>
+                                      <div className="col-span-3 text-right">CP</div>
                                     </div>
-                                    <div className="divide-y-8 divide-slate-200/80">
+                                    <div className="divide-y-2 divide-slate-200/80">
                                       {sortedEntries.map((entry, idx) => {
                                         const player = leaderboard.find(p => p.uid === entry.uid);
                                         if (!player) return null;
                                         
                                         const rank = entry.rank + 1;
                                         const cp = getCPForRank(entry.rank);
-
+ 
                                         return (
-                                          <div key={entry.uid} onClick={() => showRival(player)} className="flex flex-col md:grid md:grid-cols-12 px-4 md:px-8 py-4 md:py-6 md:items-center hover:bg-blue-50/50 transition-colors group gap-4 md:gap-0 cursor-pointer">
+                                          <div key={entry.uid} onClick={() => showRival(player)} className="flex flex-col md:grid md:grid-cols-12 px-4 md:px-6 py-2 md:py-3 md:items-center hover:bg-blue-50/50 transition-colors group gap-4 md:gap-0 cursor-pointer">
                                             <div className="flex items-center justify-start md:justify-between md:contents gap-4">
                                               <div className="w-8 md:col-span-1 font-scorebook text-slate-500 text-xs md:text-sm">{rank}</div>
                                               
@@ -1070,9 +1069,6 @@ export default function Dashboard() {
                                               </div>
 
                                               <div className="md:hidden ml-auto text-right flex flex-col items-end">
-                                                <div className="text-lg font-varsity text-blue-600 tabular-nums tracking-tighter">
-                                                  {entry.score}
-                                                </div>
                                                 {cp > 0 && activeContest.points_awarded && getContestStatus(activeContest).statusType === 'completed' && (
                                                   <div className="px-2 py-0.5 bg-amber-500 text-amber-950 text-[8px] font-black rounded-lg">
                                                     +{cp} CP
@@ -1140,16 +1136,7 @@ export default function Dashboard() {
                                               </div>
                                             </div>
 
-                                            <div className="hidden md:block col-span-1 text-right">
-                                              <div className="text-2xl font-varsity text-blue-600 tabular-nums tracking-tighter">
-                                                {entry.score}
-                                              </div>
-                                              <div className="text-[10px] font-varsity text-slate-500 uppercase tracking-widest">
-                                                {formatMetric(activeContest.metric_key)}
-                                              </div>
-                                            </div>
-
-                                            <div className="hidden md:flex col-span-2 flex-col items-end">
+                                            <div className="hidden md:flex col-span-3 flex-col items-end">
                                               {cp > 0 && activeContest.points_awarded && getContestStatus(activeContest).statusType === 'completed' ? (
                                                 <>
                                                   <div className="text-2xl font-varsity text-amber-600 tabular-nums tracking-tighter">
@@ -1238,23 +1225,22 @@ export default function Dashboard() {
                     </div>
 
                     <div className="bg-scorebook rounded-[1.5rem] md:rounded-[2rem] border-4 border-stitch overflow-hidden shadow-xl">
-                      <div className="grid grid-cols-12 px-4 md:px-8 py-4 bg-slate-50 border-b-2 border-slate-200 text-[8px] md:text-[10px] font-varsity text-slate-500 uppercase tracking-widest">
+                      <div className="grid grid-cols-12 px-4 md:px-6 py-2 bg-slate-50 border-b-2 border-slate-200 text-[8px] md:text-[10px] font-varsity text-slate-500 uppercase tracking-widest">
                         <div className="col-span-1">Rank</div>
                         <div className="col-span-3">Contestant</div>
                         <div className="hidden md:block col-span-5">Selections & Records</div>
-                        <div className="col-span-1 text-right">Score</div>
-                        <div className="col-span-2 text-right">CP</div>
+                        <div className="col-span-3 text-right">CP</div>
                       </div>
-                      <div className="divide-y-8 divide-slate-200/80">
+                      <div className="divide-y-2 divide-slate-200/80">
                         {sortedEntries.map((entry, idx) => {
                           const player = leaderboard.find(p => p.uid === entry.uid);
                           if (!player) return null;
                           
                           const rank = entry.rank + 1;
                           const cp = getCPForRank(entry.rank);
-
+ 
                           return (
-                            <div key={entry.uid} onClick={() => showRival(player)} className="flex flex-col md:grid md:grid-cols-12 px-4 md:px-8 py-4 md:py-6 md:items-center hover:bg-blue-50/50 transition-colors group gap-4 md:gap-0 cursor-pointer">
+                            <div key={entry.uid} onClick={() => showRival(player)} className="flex flex-col md:grid md:grid-cols-12 px-4 md:px-6 py-2 md:py-3 md:items-center hover:bg-blue-50/50 transition-colors group gap-4 md:gap-0 cursor-pointer">
                               <div className="flex items-center justify-start md:justify-between md:contents gap-4">
                                 <div className="w-8 md:col-span-1 font-varsity text-slate-400 text-xs md:text-sm">{rank}</div>
                                 
@@ -1269,9 +1255,6 @@ export default function Dashboard() {
                                 </div>
 
                                 <div className="md:hidden ml-auto text-right flex flex-col items-end">
-                                  <div className="text-lg font-varsity text-blue-600 tabular-nums tracking-tighter">
-                                    {entry.score}
-                                  </div>
                                   {cp > 0 && getContestStatus(activeContest).statusType === 'completed' && (
                                     <div className="px-2 py-0.5 bg-amber-500 text-amber-950 text-[8px] font-black rounded-lg">
                                       +{cp} CP
@@ -1328,16 +1311,7 @@ export default function Dashboard() {
                                 })}
                               </div>
 
-                              <div className="hidden md:block col-span-1 text-right">
-                                <div className="text-2xl font-varsity text-blue-600 tabular-nums tracking-tighter">
-                                  {entry.score}
-                                </div>
-                                <div className="text-[10px] font-varsity text-slate-400 uppercase tracking-widest">
-                                  {formatMetric(activeContest.metric_key)}
-                                </div>
-                              </div>
-
-                              <div className="hidden md:flex col-span-2 flex-col items-end">
+                              <div className="hidden md:flex col-span-3 flex-col items-end">
                                 {cp > 0 && getContestStatus(activeContest).statusType === 'completed' ? (
                                   <>
                                     <div className="text-2xl font-varsity text-amber-600 tabular-nums tracking-tighter">
