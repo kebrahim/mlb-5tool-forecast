@@ -1077,63 +1077,65 @@ export default function Dashboard() {
                                               </div>
                                             </div>
 
-                                            <div className="col-span-5">
-                                              <div className="flex flex-wrap gap-2 justify-center md:justify-start">
-                                                {[...entry.selections].sort((a, b) => (b.chips || 0) - (a.chips || 0)).map(sel => {
-                                                  const team = teams.find(t => t.id === sel.team_id);
-                                                  if (!team) return null;
-                                                  const endVal = activeContest.ending_stats?.[team.id];
-                                                  const rawValue = endVal !== undefined ? endVal : (team.stats[activeContest.metric_key as keyof typeof team.stats] || 0);
-                                                  const startValue = activeContest.starting_stats?.[team.id] || 0;
-                                                  const isStarted = parseDate(activeContest.start_time) <= new Date();
-                                                  const metricValue = activeContest.metric_key === 'wins' ? rawValue : (isStarted ? Math.max(0, rawValue - startValue) : 0);
-                                                  const gamesPlayed = team.stats.wins + team.stats.losses;
-                                                  const projectedWins = gamesPlayed > 0 ? Math.round((rawValue / gamesPlayed) * 162) : 0;
-                                                  const isTrendingCorrect = activeContest.metric_key === 'wins' ? (sel.side === 'over' ? projectedWins > team.ou_line : projectedWins < team.ou_line) : false;
+                                            <div className="col-span-5 flex flex-col gap-1 py-1">
+                                              {[
+                                                [...entry.selections].sort((a, b) => (b.chips || 0) - (a.chips || 0)).slice(0, 3),
+                                                [...entry.selections].sort((a, b) => (b.chips || 0) - (a.chips || 0)).slice(3)
+                                              ].map((row, rowIdx) => (
+                                                <div key={rowIdx} className="flex flex-row gap-1 justify-center md:justify-start">
+                                                  {row.map(sel => {
+                                                    const team = teams.find(t => t.id === sel.team_id);
+                                                    if (!team) return null;
+                                                    const endVal = activeContest.ending_stats?.[team.id];
+                                                    const rawValue = endVal !== undefined ? endVal : (team.stats[activeContest.metric_key as keyof typeof team.stats] || 0);
+                                                    const startValue = activeContest.starting_stats?.[team.id] || 0;
+                                                    const isStarted = parseDate(activeContest.start_time) <= new Date();
+                                                    const metricValue = activeContest.metric_key === 'wins' ? rawValue : (isStarted ? Math.max(0, rawValue - startValue) : 0);
+                                                    const gamesPlayed = team.stats.wins + team.stats.losses;
+                                                    const projectedWins = gamesPlayed > 0 ? Math.round((rawValue / gamesPlayed) * 162) : 0;
+                                                    const isTrendingCorrect = activeContest.metric_key === 'wins' ? (sel.side === 'over' ? projectedWins > team.ou_line : projectedWins < team.ou_line) : false;
 
-                                                  const gamesRemaining = (activeContest.results_sealed || endVal !== undefined) ? 0 : (162 - (team.stats.wins + team.stats.losses));
-                                                  const isClinched = activeContest.metric_key === 'wins'
-                                                    ? (sel.side === 'over' ? rawValue > team.ou_line : (rawValue + gamesRemaining) < team.ou_line)
-                                                    : false;
-                                                  const isEliminated = activeContest.metric_key === 'wins'
-                                                    ? (sel.side === 'over' ? (rawValue + gamesRemaining) < team.ou_line : rawValue > team.ou_line)
-                                                    : false;
+                                                    const gamesRemaining = (activeContest.results_sealed || endVal !== undefined) ? 0 : (162 - (team.stats.wins + team.stats.losses));
+                                                    const isClinched = activeContest.metric_key === 'wins'
+                                                      ? (sel.side === 'over' ? rawValue > team.ou_line : (rawValue + gamesRemaining) < team.ou_line)
+                                                      : false;
+                                                    const isEliminated = activeContest.metric_key === 'wins'
+                                                      ? (sel.side === 'over' ? (rawValue + gamesRemaining) < team.ou_line : rawValue > team.ou_line)
+                                                      : false;
 
-                                                  return (
-                                                    <div 
-                                                      key={sel.team_id}
-                                                      className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg md:rounded-xl border-2 flex items-center gap-2 md:gap-3 transition-all ${
-                                                        isClinched 
-                                                          ? 'bg-emerald-50 border-emerald-200 text-emerald-600 shadow-sm' 
-                                                          : isEliminated
-                                                            ? 'bg-rose-50 border-rose-200 text-rose-600'
-                                                            : 'bg-white border-slate-100 text-slate-500'
-                                                      }`}
-                                                    >
-                                                      <div className="flex flex-col items-start leading-none relative">
-                                                        <span className="text-xs md:text-sm font-varsity uppercase tracking-tight">{team.abbreviation}</span>
-                                                        {activeContest.metric_key === 'wins' && (
-                                                          <div className="flex items-center gap-1.5">
-                                                            <span className="text-[8px] md:text-[9px] font-varsity opacity-70 uppercase">{sel.side} {team.ou_line}</span>
-                                                            {!isClinched && !isEliminated && endVal === undefined && gamesPlayed > 0 && (
-                                                              <div className={`w-1.5 h-1.5 rounded-full ${isTrendingCorrect ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500 animate-pulse'}`} title={`Trending ${projectedWins > team.ou_line ? 'Over' : 'Under'} (Pace: ${projectedWins})`} />
-                                                            )}
-                                                          </div>
-                                                        )}
+                                                    return (
+                                                      <div 
+                                                        key={sel.team_id}
+                                                        className={`px-2 py-0.5 rounded-md border flex items-center gap-1.5 transition-all text-[10px] md:text-xs ${
+                                                          isClinched 
+                                                            ? 'bg-emerald-50 border-emerald-200 text-emerald-600' 
+                                                            : isEliminated
+                                                              ? 'bg-rose-50 border-rose-200 text-rose-600'
+                                                              : 'bg-white border-slate-100 text-slate-500'
+                                                        }`}
+                                                      >
+                                                        <div className="flex flex-col items-start leading-none relative">
+                                                          <span className="font-varsity uppercase tracking-tight">{team.abbreviation}</span>
+                                                          {activeContest.metric_key === 'wins' && (
+                                                            <div className="flex items-center gap-0.5">
+                                                              <span className="opacity-70 font-varsity tracking-tighter">{sel.side[0]}{team.ou_line}</span>
+                                                              {!isClinched && !isEliminated && endVal === undefined && gamesPlayed > 0 && (
+                                                                <div className={`w-1 h-1 rounded-full ${isTrendingCorrect ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500 animate-pulse'}`} />
+                                                              )}
+                                                            </div>
+                                                          )}
+                                                        </div>
+                                                        <span className="w-px h-3 bg-slate-200" />
+                                                        <div className="flex flex-col items-end leading-none">
+                                                          <span className="font-varsity tabular-nums">
+                                                            {activeContest.metric_key === 'wins' ? (endVal !== undefined ? rawValue : `${team.stats.wins}-${team.stats.losses}`) : metricValue}
+                                                          </span>
+                                                        </div>
                                                       </div>
-                                                      <span className="w-px h-4 bg-slate-200" />
-                                                      <div className="flex flex-col items-end leading-none">
-                                                        <span className="text-xs md:text-sm font-varsity tabular-nums">
-                                                          {activeContest.metric_key === 'wins' ? (endVal !== undefined ? rawValue : `${team.stats.wins}-${team.stats.losses}`) : metricValue}
-                                                        </span>
-                                                        {activeContest.use_chips && (
-                                                          <span className="text-[8px] md:text-[9px] font-varsity opacity-70">{sel.chips}c</span>
-                                                        )}
-                                                      </div>
-                                                    </div>
-                                                  );
-                                                })}
-                                              </div>
+                                                    );
+                                                  })}
+                                                </div>
+                                              ))}
                                             </div>
 
                                             <div className="hidden md:flex col-span-3 flex-col items-end">
@@ -1263,53 +1265,69 @@ export default function Dashboard() {
                                 </div>
                               </div>
 
-                              <div className="col-span-5 flex flex-wrap gap-2 justify-center md:justify-start">
-                                  {entry.selections.map(sel => {
-                                    const team = teams.find(t => t.id === sel.team_id);
-                                    if (!team) return null;
-                                    const endVal = activeContest.ending_stats?.[team.id];
-                                    const rawValue = endVal !== undefined ? endVal : (team.stats[activeContest.metric_key as keyof typeof team.stats] || 0);
-                                    
-                                    const gamesPlayed = team.stats.wins + team.stats.losses;
-                                    const projectedWins = gamesPlayed > 0 ? Math.round((rawValue / gamesPlayed) * 162) : 0;
-                                    const isTrendingCorrect = activeContest.metric_key === 'wins' ? (sel.side === 'over' ? projectedWins > team.ou_line : projectedWins < team.ou_line) : false;
+                              <div className="col-span-5 flex flex-col gap-1 py-1">
+                                {[
+                                  [...entry.selections].sort((a, b) => (b.chips || 0) - (a.chips || 0)).slice(0, 3),
+                                  [...entry.selections].sort((a, b) => (b.chips || 0) - (a.chips || 0)).slice(3)
+                                ].map((row, rowIdx) => (
+                                  <div key={rowIdx} className="flex flex-row gap-1 justify-center md:justify-start">
+                                    {row.map(sel => {
+                                      const team = teams.find(t => t.id === sel.team_id);
+                                      if (!team) return null;
+                                      const endVal = activeContest.ending_stats?.[team.id];
+                                      const rawValue = endVal !== undefined ? endVal : (team.stats[activeContest.metric_key as keyof typeof team.stats] || 0);
+                                      
+                                      const gamesPlayed = team.stats.wins + team.stats.losses;
+                                      const projectedWins = gamesPlayed > 0 ? Math.round((rawValue / gamesPlayed) * 162) : 0;
+                                      const isTrendingCorrect = activeContest.metric_key === 'wins' ? (sel.side === 'over' ? projectedWins > team.ou_line : projectedWins < team.ou_line) : false;
 
-                                    const gamesRemaining = 162 - (team.stats.wins + team.stats.losses);
-                                    const isClinched = activeContest.metric_key === 'wins'
-                                      ? (sel.side === 'over' ? rawValue > team.ou_line : (rawValue + gamesRemaining) < team.ou_line)
-                                      : false;
-                                    const isEliminated = activeContest.metric_key === 'wins'
-                                      ? (sel.side === 'over' ? (rawValue + gamesRemaining) < team.ou_line : rawValue > team.ou_line)
-                                      : false;
+                                      const gamesRemaining = 162 - (team.stats.wins + team.stats.losses);
+                                      const isClinched = activeContest.metric_key === 'wins'
+                                        ? (sel.side === 'over' ? rawValue > team.ou_line : (rawValue + gamesRemaining) < team.ou_line)
+                                        : false;
+                                      const isEliminated = activeContest.metric_key === 'wins'
+                                        ? (sel.side === 'over' ? (rawValue + gamesRemaining) < team.ou_line : rawValue > team.ou_line)
+                                        : false;
 
-                                    return (
-                                      <div key={sel.team_id} className={`px-4 py-2 rounded-lg border-2 flex items-center gap-3 transition-all ${isClinched ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : isEliminated ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-white border-slate-100 text-slate-500'}`}>
-                                        <div className="flex flex-col items-start leading-none gap-0.5">
-                                          <span className="text-xs md:text-sm font-varsity text-slate-900">{team.abbreviation}</span>
-                                          {activeContest.metric_key === 'wins' && (
-                                            <div className="flex items-center gap-1">
-                                              <span className={`text-[8px] md:text-[9px] font-varsity uppercase ${isClinched ? 'text-emerald-600' : isEliminated ? 'text-rose-600' : 'text-slate-400'}`}>
-                                                {sel.side[0]} {team.ou_line} {isClinched && '✓'} {isEliminated && '✗'}
-                                              </span>
-                                              {!isClinched && !isEliminated && endVal === undefined && gamesPlayed > 0 && (
-                                                <div className={`w-1.5 h-1.5 rounded-full ${isTrendingCorrect ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500 animate-pulse'}`} />
-                                              )}
-                                            </div>
-                                          )}
-                                        </div>
-                                        <span className="w-px h-4 bg-slate-200" />
-                                        <span className="text-xs md:text-sm font-varsity text-slate-600">
-                                          {(() => {
-                                            if (activeContest.metric_key === 'wins') {
-                                              return endVal !== undefined ? rawValue : `${team.stats.wins}-${team.stats.losses}`;
-                                            }
-                                            return parseDate(activeContest.start_time) <= new Date() ? Math.max(0, rawValue - (activeContest.starting_stats?.[team.id] || 0)) : 0;
-                                          })()}
-                                        </span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
+                                      return (
+                                        <div 
+                                          key={sel.team_id} 
+                                          className={`px-2 py-0.5 rounded-md border flex items-center gap-1.5 transition-all text-[10px] md:text-xs ${
+                                            isClinched 
+                                              ? 'bg-emerald-50 border-emerald-200 text-emerald-600' 
+                                              : isEliminated 
+                                                ? 'bg-rose-50 border-rose-200 text-rose-600' 
+                                                : 'bg-white border-slate-100 text-slate-500'
+                                          }`}
+                                        >
+                                          <div className="flex flex-col items-start leading-none">
+                                            <span className="font-varsity text-slate-900">{team.abbreviation}</span>
+                                            {activeContest.metric_key === 'wins' && (
+                                              <div className="flex items-center gap-0.5">
+                                                <span className={`font-varsity uppercase tracking-tighter text-[8px] md:text-[10px] ${isClinched ? 'text-emerald-600' : isEliminated ? 'text-rose-600' : 'text-slate-400'}`}>
+                                                  {sel.side[0]}{team.ou_line}
+                                                </span>
+                                                {!isClinched && !isEliminated && endVal === undefined && gamesPlayed > 0 && (
+                                                  <div className={`w-1 h-1 rounded-full ${isTrendingCorrect ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500 animate-pulse'}`} />
+                                                )}
+                                              </div>
+                                            )}
+                                          </div>
+                                          <span className="w-px h-3 bg-slate-200" />
+                                          <span className="font-varsity text-slate-600">
+                                            {(() => {
+                                              if (activeContest.metric_key === 'wins') {
+                                                return endVal !== undefined ? rawValue : `${team.stats.wins}-${team.stats.losses}`;
+                                              }
+                                              return parseDate(activeContest.start_time) <= new Date() ? Math.max(0, rawValue - (activeContest.starting_stats?.[team.id] || 0)) : 0;
+                                            })()}
+                                          </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ))}
+                            </div>
 
                               <div className="hidden md:flex col-span-3 flex-col items-end">
                                 {cp > 0 && getContestStatus(activeContest).statusType === 'completed' ? (
