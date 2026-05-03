@@ -52,6 +52,7 @@ export default function Dashboard() {
   const [teams, setTeams] = useState<TeamLine[]>([]);
   const [contests, setContests] = useState<Contest[]>([]);
   const [activeContest, setActiveContest] = useState<Contest | null>(null);
+  const isBigBet = activeContest?.id === 'big-bet' || activeContest?.theme_name?.toLowerCase().includes('big bet');
   const [userEntry, setUserEntry] = useState<Entry | null>(null);
   const [allEntries, setAllEntries] = useState<Entry[]>([]);
   const [leaderboard, setLeaderboard] = useState<UserProfile[]>([]);
@@ -1043,7 +1044,14 @@ export default function Dashboard() {
                                       <div className="col-span-1">Rank</div>
                                       <div className="col-span-3">Contestant</div>
                                       <div className="hidden md:block col-span-5">Selections & Records</div>
-                                      <div className="col-span-3 text-right">CP</div>
+                                      {isBigBet ? (
+                                        <div className="col-span-3 text-right">CP</div>
+                                      ) : (
+                                        <>
+                                          <div className="col-span-1 text-right">Score</div>
+                                          <div className="col-span-2 text-right">CP</div>
+                                        </>
+                                      )}
                                     </div>
                                     <div className="divide-y-2 divide-slate-200/80">
                                       {sortedEntries.map((entry, idx) => {
@@ -1069,6 +1077,11 @@ export default function Dashboard() {
                                               </div>
 
                                               <div className="md:hidden ml-auto text-right flex flex-col items-end">
+                                                {!isBigBet && (
+                                                  <div className="text-lg font-varsity text-blue-600 tabular-nums tracking-tighter">
+                                                    {entry.score}
+                                                  </div>
+                                                )}
                                                 {cp > 0 && activeContest.points_awarded && getContestStatus(activeContest).statusType === 'completed' && (
                                                   <div className="px-2 py-0.5 bg-amber-500 text-amber-950 text-[8px] font-black rounded-lg">
                                                     +{cp} CP
@@ -1077,12 +1090,12 @@ export default function Dashboard() {
                                               </div>
                                             </div>
 
-                                            <div className="col-span-5 flex flex-col gap-1 py-1">
-                                              {[
+                                            <div className={`col-span-5 ${isBigBet ? 'flex flex-col gap-1 py-1' : 'flex flex-wrap gap-2 justify-center md:justify-start py-2'}`}>
+                                              {(isBigBet ? [
                                                 [...entry.selections].sort((a, b) => (b.chips || 0) - (a.chips || 0)).slice(0, 3),
                                                 [...entry.selections].sort((a, b) => (b.chips || 0) - (a.chips || 0)).slice(3)
-                                              ].map((row, rowIdx) => (
-                                                <div key={rowIdx} className="flex flex-row gap-1 justify-center md:justify-start">
+                                              ] : [[...entry.selections].sort((a, b) => (b.chips || 0) - (a.chips || 0))]).map((row, rowIdx) => (
+                                                <div key={rowIdx} className={`flex ${isBigBet ? 'flex-row gap-1' : 'flex-wrap gap-2'} justify-center md:justify-start`}>
                                                   {row.map(sel => {
                                                     const team = teams.find(t => t.id === sel.team_id);
                                                     if (!team) return null;
@@ -1106,7 +1119,9 @@ export default function Dashboard() {
                                                     return (
                                                       <div 
                                                         key={sel.team_id}
-                                                        className={`px-2 py-0.5 rounded-md border flex items-center gap-1.5 transition-all text-[10px] md:text-xs ${
+                                                        className={`px-2 py-0.5 rounded-md border flex items-center gap-1 transition-all ${
+                                                          isBigBet ? 'text-[10px] md:text-xs' : 'text-xs md:text-sm px-3 py-1.5'
+                                                        } ${
                                                           isClinched 
                                                             ? 'bg-emerald-50 border-emerald-200 text-emerald-600' 
                                                             : isEliminated
@@ -1118,14 +1133,14 @@ export default function Dashboard() {
                                                           <span className="font-varsity uppercase tracking-tight">{team.abbreviation}</span>
                                                           {activeContest.metric_key === 'wins' && (
                                                             <div className="flex items-center gap-0.5">
-                                                              <span className="opacity-70 font-varsity tracking-tighter">{sel.side[0]}{team.ou_line}</span>
+                                                              <span className="opacity-70 font-sans font-bold tracking-tighter scale-90 origin-left">{sel.side[0]}{team.ou_line}</span>
                                                               {!isClinched && !isEliminated && endVal === undefined && gamesPlayed > 0 && (
                                                                 <div className={`w-1 h-1 rounded-full ${isTrendingCorrect ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500 animate-pulse'}`} />
                                                               )}
                                                             </div>
                                                           )}
                                                         </div>
-                                                        <span className="w-px h-3 bg-slate-200" />
+                                                        <span className="w-px h-3 bg-slate-200 ml-1" />
                                                         <div className="flex flex-col items-end leading-none">
                                                           <span className="font-varsity tabular-nums">
                                                             {activeContest.metric_key === 'wins' ? (endVal !== undefined ? rawValue : `${team.stats.wins}-${team.stats.losses}`) : metricValue}
@@ -1138,7 +1153,18 @@ export default function Dashboard() {
                                               ))}
                                             </div>
 
-                                            <div className="hidden md:flex col-span-3 flex-col items-end">
+                                            {!isBigBet && (
+                                              <div className="hidden md:block col-span-1 text-right">
+                                                <div className="text-2xl font-varsity text-blue-600 tabular-nums tracking-tighter">
+                                                  {entry.score}
+                                                </div>
+                                                <div className="text-[10px] font-varsity text-slate-500 uppercase tracking-widest">
+                                                  {formatMetric(activeContest.metric_key)}
+                                                </div>
+                                              </div>
+                                            )}
+
+                                            <div className={`hidden md:flex ${isBigBet ? 'col-span-3' : 'col-span-2'} flex-col items-end`}>
                                               {cp > 0 && activeContest.points_awarded && getContestStatus(activeContest).statusType === 'completed' ? (
                                                 <>
                                                   <div className="text-2xl font-varsity text-amber-600 tabular-nums tracking-tighter">
@@ -1231,7 +1257,14 @@ export default function Dashboard() {
                         <div className="col-span-1">Rank</div>
                         <div className="col-span-3">Contestant</div>
                         <div className="hidden md:block col-span-5">Selections & Records</div>
-                        <div className="col-span-3 text-right">CP</div>
+                        {isBigBet ? (
+                          <div className="col-span-3 text-right">CP</div>
+                        ) : (
+                          <>
+                            <div className="col-span-1 text-right">Score</div>
+                            <div className="col-span-2 text-right">CP</div>
+                          </>
+                        )}
                       </div>
                       <div className="divide-y-2 divide-slate-200/80">
                         {sortedEntries.map((entry, idx) => {
@@ -1257,6 +1290,11 @@ export default function Dashboard() {
                                 </div>
 
                                 <div className="md:hidden ml-auto text-right flex flex-col items-end">
+                                  {!isBigBet && (
+                                    <div className="text-lg font-varsity text-blue-600 tabular-nums tracking-tighter">
+                                      {entry.score}
+                                    </div>
+                                  )}
                                   {cp > 0 && getContestStatus(activeContest).statusType === 'completed' && (
                                     <div className="px-2 py-0.5 bg-amber-500 text-amber-950 text-[8px] font-black rounded-lg">
                                       +{cp} CP
@@ -1265,12 +1303,12 @@ export default function Dashboard() {
                                 </div>
                               </div>
 
-                              <div className="col-span-5 flex flex-col gap-1 py-1">
-                                {[
+                              <div className={`col-span-5 ${isBigBet ? 'flex flex-col gap-1 py-1' : 'flex flex-wrap gap-2 justify-center md:justify-start py-2'}`}>
+                                {(isBigBet ? [
                                   [...entry.selections].sort((a, b) => (b.chips || 0) - (a.chips || 0)).slice(0, 3),
                                   [...entry.selections].sort((a, b) => (b.chips || 0) - (a.chips || 0)).slice(3)
-                                ].map((row, rowIdx) => (
-                                  <div key={rowIdx} className="flex flex-row gap-1 justify-center md:justify-start">
+                                ] : [[...entry.selections].sort((a, b) => (b.chips || 0) - (a.chips || 0))]).map((row, rowIdx) => (
+                                  <div key={rowIdx} className={`flex ${isBigBet ? 'flex-row gap-1' : 'flex-wrap gap-2'} justify-center md:justify-start`}>
                                     {row.map(sel => {
                                       const team = teams.find(t => t.id === sel.team_id);
                                       if (!team) return null;
@@ -1290,30 +1328,32 @@ export default function Dashboard() {
                                         : false;
 
                                       return (
-                                        <div 
-                                          key={sel.team_id} 
-                                          className={`px-2 py-0.5 rounded-md border flex items-center gap-1.5 transition-all text-[10px] md:text-xs ${
-                                            isClinched 
-                                              ? 'bg-emerald-50 border-emerald-200 text-emerald-600' 
-                                              : isEliminated 
-                                                ? 'bg-rose-50 border-rose-200 text-rose-600' 
-                                                : 'bg-white border-slate-100 text-slate-500'
-                                          }`}
-                                        >
-                                          <div className="flex flex-col items-start leading-none">
-                                            <span className="font-varsity text-slate-900">{team.abbreviation}</span>
-                                            {activeContest.metric_key === 'wins' && (
-                                              <div className="flex items-center gap-0.5">
-                                                <span className={`font-varsity uppercase tracking-tighter text-[8px] md:text-[10px] ${isClinched ? 'text-emerald-600' : isEliminated ? 'text-rose-600' : 'text-slate-400'}`}>
-                                                  {sel.side[0]}{team.ou_line}
-                                                </span>
-                                                {!isClinched && !isEliminated && endVal === undefined && gamesPlayed > 0 && (
-                                                  <div className={`w-1 h-1 rounded-full ${isTrendingCorrect ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500 animate-pulse'}`} />
-                                                )}
-                                              </div>
-                                            )}
-                                          </div>
-                                          <span className="w-px h-3 bg-slate-200" />
+                                          <div 
+                                            key={sel.team_id} 
+                                            className={`px-2 py-0.5 rounded-md border flex items-center gap-1 transition-all ${
+                                              isBigBet ? 'text-[10px] md:text-xs' : 'text-xs md:text-sm px-3 py-1.5'
+                                            } ${
+                                              isClinched 
+                                                ? 'bg-emerald-50 border-emerald-200 text-emerald-600' 
+                                                : isEliminated 
+                                                  ? 'bg-rose-50 border-rose-200 text-rose-600' 
+                                                  : 'bg-white border-slate-100 text-slate-500'
+                                            }`}
+                                          >
+                                            <div className="flex flex-col items-start leading-none">
+                                              <span className="font-varsity text-slate-900">{team.abbreviation}</span>
+                                              {activeContest.metric_key === 'wins' && (
+                                                <div className="flex items-center gap-0.5">
+                                                  <span className={`font-sans font-bold uppercase tracking-tighter scale-90 origin-left text-[8px] md:text-[10px] ${isClinched ? 'text-emerald-600' : isEliminated ? 'text-rose-600' : 'text-slate-400'}`}>
+                                                    {sel.side[0]}{team.ou_line}
+                                                  </span>
+                                                  {!isClinched && !isEliminated && endVal === undefined && gamesPlayed > 0 && (
+                                                    <div className={`w-1 h-1 rounded-full ${isTrendingCorrect ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500 animate-pulse'}`} />
+                                                  )}
+                                                </div>
+                                              )}
+                                            </div>
+                                            <span className="w-px h-3 bg-slate-200 ml-1" />
                                           <span className="font-varsity text-slate-600">
                                             {(() => {
                                               if (activeContest.metric_key === 'wins') {
@@ -1329,7 +1369,18 @@ export default function Dashboard() {
                               ))}
                             </div>
 
-                              <div className="hidden md:flex col-span-3 flex-col items-end">
+                              {!isBigBet && (
+                                <div className="hidden md:block col-span-1 text-right">
+                                  <div className="text-2xl font-varsity text-blue-600 tabular-nums tracking-tighter">
+                                    {entry.score}
+                                  </div>
+                                  <div className="text-[10px] font-varsity text-slate-400 uppercase tracking-widest">
+                                    {formatMetric(activeContest.metric_key)}
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className={`hidden md:flex ${isBigBet ? 'col-span-3' : 'col-span-2'} flex-col items-end`}>
                                 {cp > 0 && getContestStatus(activeContest).statusType === 'completed' ? (
                                   <>
                                     <div className="text-2xl font-varsity text-amber-600 tabular-nums tracking-tighter">
