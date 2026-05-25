@@ -582,7 +582,7 @@ function ContestSelector({
                 <div className="px-4 py-2 text-[10px] font-varsity text-slate-400 uppercase tracking-widest border-b-2 border-slate-100 mb-2">
                   Switch Contest
                 </div>
-                {contests.sort((a, b) => parseDate(b.start_time).getTime() - parseDate(a.start_time).getTime()).map(c => {
+                {[...contests].sort((a, b) => parseDate(b.start_time).getTime() - parseDate(a.start_time).getTime()).map(c => {
                   const status = getStatus(c);
                   const isActive = c.id === currentContest.id;
                   return (

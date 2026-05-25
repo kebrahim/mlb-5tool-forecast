@@ -771,6 +771,44 @@ export default function Admin() {
     }
   };
 
+  const seedJuneContest = async () => {
+    setLoading(true);
+    try {
+      const juneSprint = { 
+        id: 'june_2026', 
+        name: 'June Sprint: Stolen Base Summer', 
+        description: 'Draft 3 teams. Total Stolen Bases in June decides the winner!',
+        metric: 'stolenBases', 
+        start: '2026-06-01T00:00:00-04:00', 
+        end: '2026-07-01T00:00:00-04:00', 
+        limit: 3, 
+        chips: false, 
+        draft: true 
+      };
+      
+      const sprintRef = doc(db, 'contests', juneSprint.id);
+      await setDoc(sprintRef, {
+        theme_name: juneSprint.name,
+        description: juneSprint.description,
+        metric_key: juneSprint.metric,
+        start_time: Timestamp.fromDate(new Date(juneSprint.start)),
+        end_time: Timestamp.fromDate(new Date(juneSprint.end)),
+        is_active: true,
+        selection_limit: juneSprint.limit,
+        use_chips: juneSprint.chips,
+        is_draft: juneSprint.draft,
+        draft_status: 'pending',
+        current_turn_index: 0
+      }, { merge: true });
+      
+      toast.success('June Sprint: Stolen Base Summer initialized! You can now manage its draft below.');
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const seedData = async () => {
     setLoading(true);
     try {
@@ -936,7 +974,7 @@ export default function Admin() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
         <div className="p-4 md:p-6 bg-slate-50 rounded-2xl border-2 border-slate-200">
           <div className="flex items-center gap-3 mb-4">
             <RefreshCw className={`${syncing ? 'text-blue-600 animate-spin' : 'text-slate-400'} md:w-[24px] md:h-[24px]`} size={20} />
@@ -987,6 +1025,29 @@ export default function Admin() {
             >
               <Database size={16} />
               {loading ? 'Seeding...' : 'Seed May Contest'}
+            </button>
+          </div>
+        </div>
+
+        <div className="p-4 md:p-6 bg-emerald-600 rounded-2xl border-4 border-white shadow-xl">
+          <div className="flex items-center gap-3 mb-4">
+            <Trophy className="text-white md:w-[24px] md:h-[24px]" size={20} />
+            <div>
+              <h3 className="font-varsity text-sm text-white uppercase tracking-tight">June Sprint Launch</h3>
+              <p className="text-[10px] font-varsity text-emerald-100 uppercase tracking-widest">One-Click Setup</p>
+            </div>
+          </div>
+          <p className="text-[10px] font-varsity text-emerald-100 leading-relaxed mb-6 uppercase tracking-widest">
+            Safely initialize the June Stolen Base Summer contest. This allows 3 team selections and tracks Stolen Bases as the metric.
+          </p>
+          <div className="grid grid-cols-1 gap-2">
+            <button
+              onClick={seedJuneContest}
+              disabled={loading}
+              className="w-full px-4 py-3 bg-white hover:bg-emerald-50 text-emerald-600 text-xs font-varsity uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-3 shadow-lg active:scale-95"
+            >
+              <Database size={16} />
+              {loading ? 'Seeding...' : 'Seed June Contest'}
             </button>
           </div>
         </div>
@@ -1276,7 +1337,11 @@ export default function Admin() {
           </div>
           
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            {contests.sort((a, b) => b.is_active ? 1 : -1).map(c => (
+            {[...contests].sort((a, b) => {
+              if (a.is_active && !b.is_active) return -1;
+              if (!a.is_active && b.is_active) return 1;
+              return 0;
+            }).map(c => (
               <div key={c.id} className="p-5 bg-slate-900 rounded-2xl border border-slate-800 flex flex-col gap-6 shadow-xl hover:border-slate-700 transition-colors">
                 {/* Header & Status */}
                 <div className="flex items-start justify-between gap-4">
