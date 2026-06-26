@@ -79,7 +79,9 @@ export default function Admin() {
 
   useEffect(() => {
     const unsubContests = onSnapshot(collection(db, 'contests'), (snap) => {
-      setContests(snap.docs.map(d => ({ id: d.id, ...d.data() } as Contest)));
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Contest));
+      const sortedList = [...list].sort((a, b) => parseDate(a.end_time).getTime() - parseDate(b.end_time).getTime());
+      setContests(sortedList);
     }, (error) => {
       console.error("Admin contests sync error:", error);
     });
@@ -143,21 +145,42 @@ export default function Admin() {
             const historicalStats = await fetchMLBStatsForDate(dateStr, false);
             
             const statsMap: Record<string, number> = {};
+            const dpMap: Record<string, number> = {};
+            const csMap: Record<string, number> = {};
+            const errMap: Record<string, number> = {};
+
             MLB_TEAMS.forEach(team => {
               const stats = historicalStats[team.id];
               if (stats) {
                 statsMap[team.id] = stats[contest.metric_key as keyof typeof stats] || 0;
+                if (contest.metric_key === 'defense') {
+                  dpMap[team.id] = stats.doublePlays || 0;
+                  csMap[team.id] = stats.caughtStealing || 0;
+                  errMap[team.id] = stats.errors || 0;
+                }
               } else {
                 statsMap[team.id] = 0;
+                if (contest.metric_key === 'defense') {
+                  dpMap[team.id] = 0;
+                  csMap[team.id] = 0;
+                  errMap[team.id] = 0;
+                }
               }
             });
             
-            batch.update(doc(db, 'contests', contest.id), {
+            const updatePayload: any = {
               starting_stats: statsMap,
               baseline_date: dateStr,
               auto_snapshotted: true,
               last_updated: new Date().toISOString()
-            });
+            };
+            if (contest.metric_key === 'defense') {
+              updatePayload.starting_doublePlays = dpMap;
+              updatePayload.starting_caughtStealing = csMap;
+              updatePayload.starting_errors = errMap;
+            }
+
+            batch.update(doc(db, 'contests', contest.id), updatePayload);
           }
 
           await batch.commit();
@@ -340,16 +363,38 @@ export default function Admin() {
         pitchData.stats?.[0]?.splits?.forEach((split: any) => {
           totalKs += split.stat?.strikeOuts || 0;
         });
+
+        // Fetch fielding gameLog
+        const fieldRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=gameLog&group=fielding&season=${season}&endDate=${dateStr}&gameType=R`);
+        const fieldData = await fieldRes.json();
+        let totalDPs = 0;
+        let totalErrors = 0;
+        fieldData.stats?.[0]?.splits?.forEach((split: any) => {
+          totalDPs += split.stat?.doublePlays || 0;
+          totalErrors += split.stat?.errors || 0;
+        });
+
+        // Fetch catching gameLog
+        const catchRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=gameLog&group=catching&season=${season}&endDate=${dateStr}&gameType=R`);
+        const catchData = await catchRes.json();
+        let totalCS = 0;
+        catchData.stats?.[0]?.splits?.forEach((split: any) => {
+          totalCS += split.stat?.caughtStealing || 0;
+        });
         
         return {
           id: team.id,
           hrs: totalHRs,
           ks: totalKs,
-          stolenBases: totalSBs
+          stolenBases: totalSBs,
+          doublePlays: totalDPs,
+          caughtStealing: totalCS,
+          errors: totalErrors,
+          defense: totalDPs + totalCS - totalErrors
         };
       } catch (e) {
         console.error(`Error fetching historical stats for ${team.name}`, e);
-        return { id: team.id, hrs: 0, ks: 0 };
+        return { id: team.id, hrs: 0, ks: 0, stolenBases: 0, doublePlays: 0, caughtStealing: 0, errors: 0, defense: 0 };
       }
     });
 
@@ -359,6 +404,10 @@ export default function Admin() {
         teamStats[stat.id].hrs = stat.hrs;
         teamStats[stat.id].ks = stat.ks;
         teamStats[stat.id].stolenBases = stat.stolenBases;
+        teamStats[stat.id].doublePlays = stat.doublePlays;
+        teamStats[stat.id].caughtStealing = stat.caughtStealing;
+        teamStats[stat.id].errors = stat.errors;
+        teamStats[stat.id].defense = stat.defense;
       } else {
         // If team not in standings (unlikely but possible if no games played yet), still record stats
         teamStats[stat.id.toString()] = {
@@ -366,7 +415,11 @@ export default function Admin() {
           losses: 0,
           hrs: stat.hrs,
           ks: stat.ks,
-          stolenBases: stat.stolenBases
+          stolenBases: stat.stolenBases,
+          doublePlays: stat.doublePlays,
+          caughtStealing: stat.caughtStealing,
+          errors: stat.errors,
+          defense: stat.defense
         };
       }
     });
@@ -425,19 +478,40 @@ export default function Admin() {
       const historicalStats = await fetchMLBStatsForDate(dateStr, true);
       
       const statsMap: Record<string, number> = {};
+      const dpMap: Record<string, number> = {};
+      const csMap: Record<string, number> = {};
+      const errMap: Record<string, number> = {};
+
       MLB_TEAMS.forEach(team => {
         const stats = historicalStats[team.id];
         if (stats) {
           statsMap[team.id] = stats[contest.metric_key as keyof typeof stats] || 0;
+          if (contest.metric_key === 'defense') {
+            dpMap[team.id] = stats.doublePlays || 0;
+            csMap[team.id] = stats.caughtStealing || 0;
+            errMap[team.id] = stats.errors || 0;
+          }
         } else {
           statsMap[team.id] = 0;
+          if (contest.metric_key === 'defense') {
+            dpMap[team.id] = 0;
+            csMap[team.id] = 0;
+            errMap[team.id] = 0;
+          }
         }
       });
 
-      await updateDoc(doc(db, 'contests', contestId), {
+      const updatePayload: any = {
         starting_stats: statsMap,
         baseline_date: dateStr
-      });
+      };
+      if (contest.metric_key === 'defense') {
+        updatePayload.starting_doublePlays = dpMap;
+        updatePayload.starting_caughtStealing = csMap;
+        updatePayload.starting_errors = errMap;
+      }
+
+      await updateDoc(doc(db, 'contests', contestId), updatePayload);
       
       toast.success(`Historical baseline (as of ${dateStr}) snapshotted for ${contest.theme_name}!`);
     } catch (error: any) {
@@ -463,20 +537,41 @@ export default function Admin() {
       const historicalStats = await fetchMLBStatsForDate(dateStr, false);
       
       const statsMap: Record<string, number> = {};
+      const dpMap: Record<string, number> = {};
+      const csMap: Record<string, number> = {};
+      const errMap: Record<string, number> = {};
+
       MLB_TEAMS.forEach(team => {
         const stats = historicalStats[team.id];
         if (stats) {
           statsMap[team.id] = stats[contest.metric_key as keyof typeof stats] || 0;
+          if (contest.metric_key === 'defense') {
+            dpMap[team.id] = stats.doublePlays || 0;
+            csMap[team.id] = stats.caughtStealing || 0;
+            errMap[team.id] = stats.errors || 0;
+          }
         } else {
           statsMap[team.id] = 0;
+          if (contest.metric_key === 'defense') {
+            dpMap[team.id] = 0;
+            csMap[team.id] = 0;
+            errMap[team.id] = 0;
+          }
         }
       });
 
-      await updateDoc(doc(db, 'contests', contestId), {
+      const updatePayload: any = {
         ending_stats: statsMap,
         results_sealed: true,
         last_updated: new Date().toISOString()
-      });
+      };
+      if (contest.metric_key === 'defense') {
+        updatePayload.ending_doublePlays = dpMap;
+        updatePayload.ending_caughtStealing = csMap;
+        updatePayload.ending_errors = errMap;
+      }
+
+      await updateDoc(doc(db, 'contests', contestId), updatePayload);
       
       toast.success(`Final results sealed as of ${dateStr} for ${contest.theme_name}!`, { id: 'final-snap' });
     } catch (error: any) {
@@ -633,7 +728,11 @@ export default function Admin() {
           losses: tr.losses,
           hrs: 0,
           ks: 0,
-          stolenBases: 0
+          stolenBases: 0,
+          doublePlays: 0,
+          caughtStealing: 0,
+          errors: 0,
+          defense: 0
         };
       });
     });
@@ -654,10 +753,29 @@ export default function Admin() {
         const pitchData = await pitchRes.json();
         const pitchStat = pitchData.stats?.[0]?.splits?.[0]?.stat;
 
+        // Fetch Team Fielding Season Stats (Double Plays & Errors)
+        const fieldRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=season&group=fielding&season=2026&gameType=R`);
+        const fieldData = await fieldRes.json();
+        const fieldStat = fieldData.stats?.[0]?.splits?.[0]?.stat;
+
+        // Fetch Team Catching Season Stats (Caught Stealing)
+        const catchRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=season&group=catching&season=2026&gameType=R`);
+        const catchData = await catchRes.json();
+        const catchStat = catchData.stats?.[0]?.splits?.[0]?.stat;
+
         if (teamStatsMap[tid]) {
           teamStatsMap[tid].hrs = hitStat?.homeRuns || 0;
           teamStatsMap[tid].stolenBases = hitStat?.stolenBases || 0;
           teamStatsMap[tid].ks = pitchStat?.strikeOuts || 0;
+          
+          const dps = fieldStat?.doublePlays || 0;
+          const errs = fieldStat?.errors || 0;
+          const cs = catchStat?.caughtStealing || 0;
+          
+          teamStatsMap[tid].doublePlays = dps;
+          teamStatsMap[tid].caughtStealing = cs;
+          teamStatsMap[tid].errors = errs;
+          teamStatsMap[tid].defense = dps + cs - errs;
         }
       } catch (err) {
         console.error(`Error fetching detailed stats for team ${team.name}:`, err);
@@ -678,6 +796,10 @@ export default function Admin() {
           "stats.hrs": stats.hrs,
           "stats.ks": stats.ks,
           "stats.stolenBases": stats.stolenBases,
+          "stats.doublePlays": stats.doublePlays || 0,
+          "stats.caughtStealing": stats.caughtStealing || 0,
+          "stats.errors": stats.errors || 0,
+          "stats.defense": stats.defense || 0,
           last_sync: new Date().toISOString()
         });
         updatedCount++;
@@ -729,6 +851,10 @@ export default function Admin() {
       case 'ks': return 'Pitching Ks';
       case 'wins': return 'CP Hits';
       case 'stolenbases': return 'Stolen Bases';
+      case 'defense': return 'Defensive Score (DP + CS - E)';
+      case 'doubleplays': return 'Double Plays';
+      case 'caughtstealing': return 'Caught Stealing';
+      case 'errors': return 'Errors';
       default: return key?.toUpperCase() || 'UNKNOWN';
     }
   };
@@ -809,6 +935,44 @@ export default function Admin() {
     }
   };
 
+  const seedJulyContest = async () => {
+    setLoading(true);
+    try {
+      const julySprint = { 
+        id: 'july_2026', 
+        name: 'July Monthly Contest: Defensive Showdown', 
+        description: 'Draft 3 teams. Total Defensive Score (Double Plays + Caught Stealing - Errors) in July decides the winner!',
+        metric: 'defense', 
+        start: '2026-07-01T00:00:00-04:00', 
+        end: '2026-08-01T00:00:00-04:00', 
+        limit: 3, 
+        chips: false, 
+        draft: true 
+      };
+      
+      const sprintRef = doc(db, 'contests', julySprint.id);
+      await setDoc(sprintRef, {
+        theme_name: julySprint.name,
+        description: julySprint.description,
+        metric_key: julySprint.metric,
+        start_time: Timestamp.fromDate(new Date(julySprint.start)),
+        end_time: Timestamp.fromDate(new Date(julySprint.end)),
+        is_active: true,
+        selection_limit: julySprint.limit,
+        use_chips: julySprint.chips,
+        is_draft: julySprint.draft,
+        draft_status: 'pending',
+        current_turn_index: 0
+      }, { merge: true });
+      
+      toast.success('July Monthly Contest: Defensive Showdown initialized! You can now manage its draft below.');
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const seedData = async () => {
     setLoading(true);
     try {
@@ -821,7 +985,7 @@ export default function Admin() {
           team_name: team.name,
           abbreviation: team.abbr,
           ou_line: DEFAULT_LINES[team.id] || 81.0,
-          stats: { wins: 0, losses: 0, hrs: 0, ks: 0, stolenBases: 0 },
+          stats: { wins: 0, losses: 0, hrs: 0, ks: 0, stolenBases: 0, doublePlays: 0, caughtStealing: 0, errors: 0, defense: 0 },
           last_sync: new Date().toISOString()
         });
       });
@@ -871,6 +1035,17 @@ export default function Admin() {
           metric: 'stolenBases', 
           start: '2026-06-01T00:00:00-04:00', 
           end: '2026-07-01T00:00:00-04:00', 
+          limit: 3, 
+          chips: false, 
+          draft: true 
+        },
+        { 
+          id: 'july_2026', 
+          name: 'July Monthly Contest: Defensive Showdown', 
+          description: 'Draft 3 teams. Total Defensive Score (Double Plays + Caught Stealing - Errors) in July decides the winner!',
+          metric: 'defense', 
+          start: '2026-07-01T00:00:00-04:00', 
+          end: '2026-08-01T00:00:00-04:00', 
           limit: 3, 
           chips: false, 
           draft: true 
@@ -1048,6 +1223,29 @@ export default function Admin() {
             >
               <Database size={16} />
               {loading ? 'Seeding...' : 'Seed June Contest'}
+            </button>
+          </div>
+        </div>
+
+        <div className="p-4 md:p-6 bg-indigo-900 rounded-2xl border-4 border-white shadow-xl">
+          <div className="flex items-center gap-3 mb-4">
+            <Trophy className="text-white md:w-[24px] md:h-[24px]" size={20} />
+            <div>
+              <h3 className="font-varsity text-sm text-white uppercase tracking-tight">July Contest Launch</h3>
+              <p className="text-[10px] font-varsity text-indigo-200 uppercase tracking-widest">One-Click Setup</p>
+            </div>
+          </div>
+          <p className="text-[10px] font-varsity text-indigo-100 leading-relaxed mb-6 uppercase tracking-widest">
+            Initialize the July Defensive Showdown contest. Tracks total Double Plays + Caught Stealing - Errors as the metric.
+          </p>
+          <div className="grid grid-cols-1 gap-2">
+            <button
+              onClick={seedJulyContest}
+              disabled={loading}
+              className="w-full px-4 py-3 bg-white hover:bg-indigo-50 text-indigo-950 text-xs font-varsity uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-3 shadow-lg active:scale-95"
+            >
+              <Database size={16} />
+              {loading ? 'Seeding...' : 'Seed July Contest'}
             </button>
           </div>
         </div>
@@ -1337,11 +1535,7 @@ export default function Admin() {
           </div>
           
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            {[...contests].sort((a, b) => {
-              if (a.is_active && !b.is_active) return -1;
-              if (!a.is_active && b.is_active) return 1;
-              return 0;
-            }).map(c => (
+            {[...contests].sort((a, b) => parseDate(a.end_time).getTime() - parseDate(b.end_time).getTime()).map(c => (
               <div key={c.id} className="p-5 bg-slate-900 rounded-2xl border border-slate-800 flex flex-col gap-6 shadow-xl hover:border-slate-700 transition-colors">
                 {/* Header & Status */}
                 <div className="flex items-start justify-between gap-4">
@@ -1386,6 +1580,7 @@ export default function Admin() {
                           <option value="hrs">Home Runs</option>
                           <option value="ks">Strikeouts</option>
                           <option value="stolenBases">Stolen Bases</option>
+                          <option value="defense">Defensive Score (DP + CS - E)</option>
                         </select>
                       </div>
                     </div>
@@ -1710,6 +1905,10 @@ export default function Admin() {
                 <th className="py-3 px-4 text-center text-rose-600">HRs</th>
                 <th className="py-3 px-4 text-center text-amber-600">Ks</th>
                 <th className="py-3 px-4 text-center text-emerald-600">SBs</th>
+                <th className="py-3 px-4 text-center text-blue-600">DP</th>
+                <th className="py-3 px-4 text-center text-indigo-600">CS</th>
+                <th className="py-3 px-4 text-center text-rose-500">ERR</th>
+                <th className="py-3 px-4 text-center text-teal-600 font-bold">DEF</th>
                 <th className="py-3 px-4 text-right">O/U Line</th>
               </tr>
             </thead>
@@ -1727,6 +1926,10 @@ export default function Admin() {
                   <td className="py-3 px-4 text-center font-scorebook text-rose-600 font-bold">{team.stats?.hrs || 0}</td>
                   <td className="py-3 px-4 text-center font-scorebook text-amber-600">{team.stats?.ks || 0}</td>
                   <td className="py-3 px-4 text-center font-scorebook text-emerald-600">{team.stats?.stolenBases || 0}</td>
+                  <td className="py-3 px-4 text-center font-scorebook text-blue-600">{(team.stats as any)?.doublePlays || 0}</td>
+                  <td className="py-3 px-4 text-center font-scorebook text-indigo-600">{(team.stats as any)?.caughtStealing || 0}</td>
+                  <td className="py-3 px-4 text-center font-scorebook text-rose-500">{(team.stats as any)?.errors || 0}</td>
+                  <td className="py-3 px-4 text-center font-scorebook text-teal-600 font-bold">{(team.stats as any)?.defense || 0}</td>
                   <td className="py-3 px-4 text-right font-varsity text-slate-400 text-xs">{team.ou_line}</td>
                 </tr>
               ))}

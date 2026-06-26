@@ -84,6 +84,10 @@ function SnakeDraftRoom({
       case 'ks': return 'Pitching Ks';
       case 'wins': return 'CP';
       case 'stolenbases': return 'Stolen Bases';
+      case 'defense': return 'Defensive Score';
+      case 'doubleplays': return 'Double Plays';
+      case 'caughtstealing': return 'Caught Stealing';
+      case 'errors': return 'Errors';
       default: return key.toUpperCase();
     }
   };
@@ -341,6 +345,10 @@ function SelectionRoom({
       case 'ks': return 'Pitching Ks';
       case 'wins': return 'CP';
       case 'stolenbases': return 'Stolen Bases';
+      case 'defense': return 'Defensive Score';
+      case 'doubleplays': return 'Double Plays';
+      case 'caughtstealing': return 'Caught Stealing';
+      case 'errors': return 'Errors';
       default: return key.toUpperCase();
     }
   };
@@ -582,7 +590,7 @@ function ContestSelector({
                 <div className="px-4 py-2 text-[10px] font-varsity text-slate-400 uppercase tracking-widest border-b-2 border-slate-100 mb-2">
                   Switch Contest
                 </div>
-                {[...contests].sort((a, b) => parseDate(b.start_time).getTime() - parseDate(a.start_time).getTime()).map(c => {
+                {[...contests].sort((a, b) => parseDate(a.end_time).getTime() - parseDate(b.end_time).getTime()).map(c => {
                   const status = getStatus(c);
                   const isActive = c.id === currentContest.id;
                   return (

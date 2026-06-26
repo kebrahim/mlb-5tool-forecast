@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db, auth } from '../firebase';
-import { doc, getDoc, collection, onSnapshot, query, where, getDocs, updateDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, onSnapshot, query, where, getDocs, updateDoc, setDoc, writeBatch, Timestamp } from 'firebase/firestore';
 import { UserProfile, TeamLine, Contest, Entry, Selection } from '../types';
 import { Trophy, Users, LayoutDashboard, Settings, ChevronRight, ChevronLeft, BarChart3, Lock, LogOut, Menu, EyeOff, Play, Calendar, AlertTriangle } from 'lucide-react';
+import { MLB_TEAMS, DEFAULT_LINES } from '../mlbData';
 import Drafting from './Drafting';
 import Admin from './Admin';
 import { motion, AnimatePresence } from 'motion/react';
@@ -63,6 +64,132 @@ export default function Dashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [autoSeeding, setAutoSeeding] = useState(false);
+
+  useEffect(() => {
+    const isAdmin = user?.role === 'admin' || currentUserEmail?.toLowerCase() === 'kebrahim@gmail.com';
+    if (
+      isAdmin &&
+      teams.length === 0 &&
+      contests.length === 0 &&
+      !autoSeeding
+    ) {
+      const runAutoSeed = async () => {
+        setAutoSeeding(true);
+        const toastId = toast.loading('Database is empty. Automatically seeding MLB teams and contests...');
+        try {
+          const batch = writeBatch(db);
+
+          // 1. Seed Teams
+          MLB_TEAMS.forEach((team) => {
+            const teamRef = doc(db, 'team_lines', team.id);
+            batch.set(teamRef, {
+              team_name: team.name,
+              abbreviation: team.abbr,
+              ou_line: DEFAULT_LINES[team.id] || 81.0,
+              stats: { wins: 0, losses: 0, hrs: 0, ks: 0, stolenBases: 0, doublePlays: 0, caughtStealing: 0, errors: 0, defense: 0 },
+              last_sync: new Date().toISOString()
+            });
+          });
+
+          // 2. Seed Initial Season-Long Contest
+          const seasonRef = doc(db, 'contests', 'season_2026');
+          batch.set(seasonRef, {
+            theme_name: 'Season 2026: Big Bet',
+            description: 'Pick 5 teams to go OVER or UNDER their projected win totals. Use 100 confidence chips to weigh your picks.',
+            metric_key: 'wins',
+            start_time: Timestamp.fromDate(new Date('2026-03-25T20:00:00-04:00')),
+            end_time: Timestamp.fromDate(new Date('2026-10-01T00:00:00Z')),
+            is_active: true,
+            selection_limit: 5,
+            use_chips: true,
+            is_draft: false
+          }, { merge: true });
+
+          // 3. Seed Monthly Sprints
+          const monthlySprints = [
+            { 
+              id: 'april_2026', 
+              name: 'April Sprint: HR Derby', 
+              description: 'Draft 3 teams in a snake draft. The total home runs hit by your teams in April determines your score.',
+              metric: 'hrs', 
+              start: '2026-04-01T00:00:00-04:00', 
+              end: '2026-05-01T00:00:00-04:00', 
+              limit: 3, 
+              chips: false, 
+              draft: true 
+            },
+            { 
+              id: 'may_2026', 
+              name: 'May Strikeout King', 
+              description: 'Draft 3 teams. Total strikeouts thrown by your pitching staff in May decides the winner!',
+              metric: 'ks', 
+              start: '2026-05-01T00:00:00-04:00', 
+              end: '2026-06-01T00:00:00-04:00', 
+              limit: 3, 
+              chips: false, 
+              draft: true 
+            },
+            { 
+              id: 'june_2026', 
+              name: 'June Sprint: Stolen Base Summer', 
+              description: 'Draft 3 teams. Total Stolen Bases in June decides the winner!',
+              metric: 'stolenBases', 
+              start: '2026-06-01T00:00:00-04:00', 
+              end: '2026-07-01T00:00:00-04:00', 
+              limit: 3, 
+              chips: false, 
+              draft: true 
+            },
+            { 
+              id: 'july_2026', 
+              name: 'July Monthly Contest: Defensive Showdown', 
+              description: 'Draft 3 teams. Total Defensive Score (Double Plays + Caught Stealing - Errors) in July decides the winner!',
+              metric: 'defense', 
+              start: '2026-07-01T00:00:00-04:00', 
+              end: '2026-08-01T00:00:00-04:00', 
+              limit: 3, 
+              chips: false, 
+              draft: true 
+            },
+          ];
+
+          monthlySprints.forEach(sprint => {
+            const sprintRef = doc(db, 'contests', sprint.id);
+            batch.set(sprintRef, {
+              theme_name: sprint.name,
+              metric_key: sprint.metric,
+              start_time: Timestamp.fromDate(new Date(sprint.start)),
+              end_time: Timestamp.fromDate(new Date(sprint.end)),
+              is_active: true,
+              selection_limit: sprint.limit,
+              use_chips: sprint.chips,
+              is_draft: sprint.draft,
+              draft_status: 'pending',
+              current_turn_index: 0
+            }, { merge: true });
+          });
+
+          // 4. Seed Settings
+          const syncRef = doc(db, 'settings', 'mlb_sync');
+          batch.set(syncRef, {
+            enabled: false,
+            last_updated: new Date().toISOString(),
+            updated_by: auth.currentUser?.uid || 'system'
+          }, { merge: true });
+
+          await batch.commit();
+          toast.success('Database initialized successfully!', { id: toastId });
+        } catch (err: any) {
+          console.error('Auto-seed failed:', err);
+          toast.error(`Auto-seed failed: ${err.message}`, { id: toastId });
+        } finally {
+          setAutoSeeding(false);
+        }
+      };
+      runAutoSeed();
+    }
+  }, [user, currentUserEmail, teams.length, contests.length, autoSeeding]);
 
   useEffect(() => {
     if (view === 'standings' && !activeContest && contests.length > 0) {
@@ -122,16 +249,17 @@ export default function Dashboard() {
     // Contests
     const unsubContests = onSnapshot(collection(db, 'contests'), (snap) => {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Contest));
-      setContests(list);
+      const sortedList = [...list].sort((a, b) => parseDate(a.end_time).getTime() - parseDate(b.end_time).getTime());
+      setContests(sortedList);
       
       setActiveContest(prev => {
         if (prev) {
-          const current = list.find(c => c.id === prev.id);
+          const current = sortedList.find(c => c.id === prev.id);
           if (current && current.is_active) {
             return current;
           }
         }
-        const defaultContest = list.find(c => c.id === 'april_2026' && c.is_active) || list.find(c => c.is_active) || null;
+        const defaultContest = sortedList.find(c => c.id === 'april_2026' && c.is_active) || sortedList.find(c => c.is_active) || null;
         return defaultContest;
       });
     }, (error) => {
@@ -217,6 +345,10 @@ export default function Dashboard() {
       case 'stolenbases': return 'Stolen Bases';
       case 'rbi': return 'RBIs';
       case 'avg': return 'Avg';
+      case 'defense': return 'Defensive Score';
+      case 'doubleplays': return 'Double Plays';
+      case 'caughtstealing': return 'Caught Stealing';
+      case 'errors': return 'Errors';
       default: return key.toUpperCase();
     }
   };
@@ -915,6 +1047,69 @@ export default function Dashboard() {
                                             const startValue = activeContest.starting_stats?.[team.id] || 0;
                                             const isStarted = parseDate(activeContest.start_time) <= new Date();
                                             const metricValue = isStarted ? Math.max(0, rawValue - startValue) : 0;
+
+                                            if (activeContest.metric_key === 'defense') {
+                                              const startDP = (activeContest as any).starting_doublePlays?.[team.id] || 0;
+                                              const startCS = (activeContest as any).starting_caughtStealing?.[team.id] || 0;
+                                              const startErr = (activeContest as any).starting_errors?.[team.id] || 0;
+
+                                              const rawDP = (activeContest as any).ending_doublePlays?.[team.id] !== undefined 
+                                                ? (activeContest as any).ending_doublePlays[team.id] 
+                                                : (team.stats.doublePlays || 0);
+                                              const rawCS = (activeContest as any).ending_caughtStealing?.[team.id] !== undefined 
+                                                ? (activeContest as any).ending_caughtStealing[team.id] 
+                                                : (team.stats.caughtStealing || 0);
+                                              const rawErr = (activeContest as any).ending_errors?.[team.id] !== undefined 
+                                                ? (activeContest as any).ending_errors[team.id] 
+                                                : (team.stats.errors || 0);
+
+                                              const dpVal = isStarted ? Math.max(0, rawDP - startDP) : 0;
+                                              const csVal = isStarted ? Math.max(0, rawCS - startCS) : 0;
+                                              const errVal = isStarted ? Math.max(0, rawErr - startErr) : 0;
+                                              const defVal = dpVal + csVal - errVal;
+
+                                              return (
+                                                <div key={sel.team_id} className="bg-scorebook p-6 rounded-2xl border-2 border-slate-200 shadow-md flex flex-col gap-4 group hover:border-[var(--color-stitch-red)] transition-all">
+                                                  <div className="flex justify-between items-center">
+                                                    <div>
+                                                      <h3 className="font-varsity text-lg text-slate-900 uppercase tracking-tight">{team.team_name}</h3>
+                                                      <div className="text-[10px] text-slate-500 uppercase tracking-widest font-varsity">
+                                                        {activeContest.is_draft ? 'Draft Pick' : 'Selection'}
+                                                      </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                      <div className="text-3xl font-varsity text-blue-600 tabular-nums tracking-tighter">
+                                                        {defVal}
+                                                      </div>
+                                                      <div className="text-[10px] text-slate-500 uppercase tracking-widest font-varsity">
+                                                        Defensive Score
+                                                      </div>
+                                                    </div>
+                                                  </div>
+
+                                                  <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200 text-[11px] space-y-2 font-varsity uppercase tracking-wider text-slate-600">
+                                                    <div className="flex justify-between items-center">
+                                                      <span>Double Plays Turned:</span>
+                                                      <span className="font-mono text-emerald-600 font-bold">+{dpVal} <span className="text-[8px] text-slate-400">({startDP} → {rawDP})</span></span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center">
+                                                      <span>Caught Stealing:</span>
+                                                      <span className="font-mono text-emerald-600 font-bold">+{csVal} <span className="text-[8px] text-slate-400">({startCS} → {rawCS})</span></span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center">
+                                                      <span>Errors Committed:</span>
+                                                      <span className="font-mono text-rose-500 font-bold">-{errVal} <span className="text-[8px] text-slate-400">({startErr} → {rawErr})</span></span>
+                                                    </div>
+                                                    <div className="h-px bg-slate-200 my-1" />
+                                                    <div className="flex justify-between items-center text-xs font-black text-slate-800">
+                                                      <span>Calculation:</span>
+                                                      <span>{dpVal} + {csVal} - {errVal} = {defVal}</span>
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              );
+                                            }
+
                                             return (
                                               <div key={sel.team_id} className="bg-scorebook p-6 rounded-2xl border-2 border-slate-200 shadow-md flex justify-between items-center group hover:border-[var(--color-stitch-red)] transition-all">
                                                 <div>
@@ -1477,6 +1672,69 @@ export default function Dashboard() {
                       const startValue = activeContest.starting_stats?.[team.id] || 0;
                       const isStarted = parseDate(activeContest.start_time) <= new Date();
                       const metricValue = isStarted ? Math.max(0, rawValue - startValue) : 0;
+
+                      if (activeContest.metric_key === 'defense') {
+                        const startDP = (activeContest as any).starting_doublePlays?.[team.id] || 0;
+                        const startCS = (activeContest as any).starting_caughtStealing?.[team.id] || 0;
+                        const startErr = (activeContest as any).starting_errors?.[team.id] || 0;
+
+                        const rawDP = (activeContest as any).ending_doublePlays?.[team.id] !== undefined 
+                          ? (activeContest as any).ending_doublePlays[team.id] 
+                          : (team.stats.doublePlays || 0);
+                        const rawCS = (activeContest as any).ending_caughtStealing?.[team.id] !== undefined 
+                          ? (activeContest as any).ending_caughtStealing[team.id] 
+                          : (team.stats.caughtStealing || 0);
+                        const rawErr = (activeContest as any).ending_errors?.[team.id] !== undefined 
+                          ? (activeContest as any).ending_errors[team.id] 
+                          : (team.stats.errors || 0);
+
+                        const dpVal = isStarted ? Math.max(0, rawDP - startDP) : 0;
+                        const csVal = isStarted ? Math.max(0, rawCS - startCS) : 0;
+                        const errVal = isStarted ? Math.max(0, rawErr - startErr) : 0;
+                        const defVal = dpVal + csVal - errVal;
+
+                        return (
+                          <div key={sel.team_id} className="bg-white p-5 rounded-2xl border-2 border-slate-200 shadow-sm flex flex-col gap-3">
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <div className="font-varsity text-slate-900 uppercase tracking-tight text-base">{team.team_name}</div>
+                                <div className="text-[9px] text-slate-500 uppercase tracking-widest font-varsity">
+                                  {activeContest.is_draft ? 'Draft Pick' : 'Selection'}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-2xl font-varsity text-blue-600 tabular-nums tracking-tighter">
+                                  {defVal}
+                                </div>
+                                <div className="text-[9px] text-slate-400 uppercase tracking-widest font-varsity leading-none">
+                                  Defensive Score
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-[10px] space-y-1.5 font-varsity uppercase tracking-wider text-slate-600">
+                              <div className="flex justify-between items-center">
+                                <span>Double Plays Turned:</span>
+                                <span className="font-mono text-emerald-600 font-bold">+{dpVal} <span className="text-[8px] text-slate-400">({startDP} → {rawDP})</span></span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span>Caught Stealing:</span>
+                                <span className="font-mono text-emerald-600 font-bold">+{csVal} <span className="text-[8px] text-slate-400">({startCS} → {rawCS})</span></span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span>Errors Committed:</span>
+                                <span className="font-mono text-rose-500 font-bold">-{errVal} <span className="text-[8px] text-slate-400">({startErr} → {rawErr})</span></span>
+                              </div>
+                              <div className="h-px bg-slate-200 my-0.5" />
+                              <div className="flex justify-between items-center text-[11px] font-black text-slate-800">
+                                <span>Calculation:</span>
+                                <span>{dpVal} + {csVal} - {errVal} = {defVal}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+
                       return (
                         <div key={sel.team_id} className="flex justify-between items-center p-4 rounded-xl border-2 border-slate-100 shadow-sm">
                           <div>

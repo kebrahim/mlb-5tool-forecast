@@ -12,6 +12,10 @@ export interface TeamStats {
   hrs: number;
   ks: number;
   stolenBases: number;
+  doublePlays: number;
+  caughtStealing: number;
+  errors: number;
+  defense: number;
 }
 
 export interface TeamLine {

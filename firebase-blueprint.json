@@ -26,7 +26,12 @@
             "wins": { "type": "number" },
             "losses": { "type": "number" },
             "hrs": { "type": "number" },
-            "ks": { "type": "number" }
+            "ks": { "type": "number" },
+            "stolenBases": { "type": "number" },
+            "doublePlays": { "type": "number" },
+            "caughtStealing": { "type": "number" },
+            "errors": { "type": "number" },
+            "defense": { "type": "number" }
           }
         },
         "last_sync": { "type": "string", "format": "date-time" }
