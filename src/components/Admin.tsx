@@ -3,7 +3,7 @@ import { db, auth } from '../firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { doc, setDoc, updateDoc, collection, writeBatch, onSnapshot, getDocs, deleteDoc, query, Timestamp, increment } from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
-import { Database, ShieldCheck, AlertCircle, Clock, RefreshCw, Power, ListOrdered, Play, Trash2, UserMinus, Mail, Search, Trophy, Lock, Wrench } from 'lucide-react';
+import { Database, ShieldCheck, AlertCircle, Clock, RefreshCw, Power, ListOrdered, Play, Trash2, UserMinus, Mail, Search, Trophy, Lock, Wrench, Users, Sparkles } from 'lucide-react';
 import { MLB_TEAMS, DEFAULT_LINES } from '../mlbData';
 import { UserProfile, Contest } from '../types';
 
@@ -72,14 +72,32 @@ export default function Admin() {
 
   const parseDate = (date: any): Date => {
     if (!date) return new Date();
-    if (date.toDate && typeof date.toDate === 'function') return date.toDate();
-    if (date instanceof Timestamp) return date.toDate();
-    return new Date(date);
+    if (date instanceof Date) return date;
+    if (typeof date.toDate === 'function') return date.toDate();
+    if (date && typeof date === 'object') {
+      if (typeof date.seconds === 'number') {
+        return new Date(date.seconds * 1000);
+      }
+      if (typeof date._seconds === 'number') {
+        return new Date(date._seconds * 1000);
+      }
+      if ('seconds' in date && typeof date.seconds === 'number') {
+        return new Date(date.seconds * 1000);
+      }
+    }
+    if (typeof date === 'string' || typeof date === 'number') {
+      const d = new Date(date);
+      if (!isNaN(d.getTime())) return d;
+    }
+    return new Date();
   };
 
   useEffect(() => {
     const unsubContests = onSnapshot(collection(db, 'contests'), (snap) => {
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Contest));
+      const mlbContestIds = ['season_2026', 'april_2026', 'may_2026', 'june_2026', 'july_2026'];
+      const list = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as Contest))
+        .filter(c => mlbContestIds.includes(c.id));
       const sortedList = [...list].sort((a, b) => parseDate(a.end_time).getTime() - parseDate(b.end_time).getTime());
       setContests(sortedList);
     }, (error) => {
@@ -112,7 +130,7 @@ export default function Admin() {
     };
   }, []);
 
-  // Auto-snapshot logic for contests that have started but have no starting_stats
+  // Auto-snapshot logic for contests that have started but have no starting_stats, and completed contests with no ending_stats
   useEffect(() => {
     const checkAutoSnapshots = async () => {
       const now = new Date();
@@ -120,18 +138,28 @@ export default function Admin() {
         c.metric_key !== 'wins' && 
         !c.starting_stats && 
         c.start_time &&
-        parseDate(c.start_time).getTime() <= now.getTime() &&
-        parseDate(c.end_time).getTime() > now.getTime()
+        parseDate(c.start_time).getTime() <= now.getTime()
       );
 
-      if (contestsToSnapshot.length > 0 && !syncing) {
-        console.log("Found contests needing auto-snapshot:", contestsToSnapshot.map(c => c.theme_name));
+      const contestsToSeal = contests.filter(c =>
+        c.metric_key !== 'wins' &&
+        c.starting_stats &&
+        !c.ending_stats &&
+        c.end_time &&
+        parseDate(c.end_time).getTime() <= now.getTime()
+      );
+
+      if ((contestsToSnapshot.length > 0 || contestsToSeal.length > 0) && !syncing) {
+        console.log("Found contests needing auto-starting stats:", contestsToSnapshot.map(c => c.theme_name));
+        console.log("Found contests needing auto-ending stats:", contestsToSeal.map(c => c.theme_name));
         
         try {
           setSyncing(true);
           
           const batch = writeBatch(db);
+          let didUpdate = false;
           
+          // Capture starting stats
           for (const contest of contestsToSnapshot) {
             toast.loading(`Capturing historical baseline for ${contest.theme_name}...`, { id: 'auto-snap' });
             
@@ -181,13 +209,71 @@ export default function Admin() {
             }
 
             batch.update(doc(db, 'contests', contest.id), updatePayload);
+            didUpdate = true;
           }
 
-          await batch.commit();
-          toast.success(`Automatically captured historical baselines for ${contestsToSnapshot.length} contest(s)`, { id: 'auto-snap' });
+          // Capture ending stats (sealing results)
+          for (const contest of contestsToSeal) {
+            toast.loading(`Sealing and capturing final stats for ${contest.theme_name}...`, { id: 'auto-seal' });
+            
+            // Calculate the ending date
+            const endDate = parseDate(contest.end_time);
+            const dateStr = endDate.toISOString().split('T')[0];
+            
+            // Fetch historical stats for that date
+            const historicalStats = await fetchMLBStatsForDate(dateStr, false);
+            
+            const statsMap: Record<string, number> = {};
+            const dpMap: Record<string, number> = {};
+            const csMap: Record<string, number> = {};
+            const errMap: Record<string, number> = {};
+
+            MLB_TEAMS.forEach(team => {
+              const stats = historicalStats[team.id];
+              if (stats) {
+                statsMap[team.id] = stats[contest.metric_key as keyof typeof stats] || 0;
+                if (contest.metric_key === 'defense') {
+                  dpMap[team.id] = stats.doublePlays || 0;
+                  csMap[team.id] = stats.caughtStealing || 0;
+                  errMap[team.id] = stats.errors || 0;
+                }
+              } else {
+                statsMap[team.id] = 0;
+                if (contest.metric_key === 'defense') {
+                  dpMap[team.id] = 0;
+                  csMap[team.id] = 0;
+                  errMap[team.id] = 0;
+                }
+              }
+            });
+            
+            const updatePayload: any = {
+              ending_stats: statsMap,
+              results_sealed: true,
+              last_updated: new Date().toISOString()
+            };
+            if (contest.metric_key === 'defense') {
+              updatePayload.ending_doublePlays = dpMap;
+              updatePayload.ending_caughtStealing = csMap;
+              updatePayload.ending_errors = errMap;
+            }
+
+            batch.update(doc(db, 'contests', contest.id), updatePayload);
+            didUpdate = true;
+          }
+
+          if (didUpdate) {
+            await batch.commit();
+            if (contestsToSnapshot.length > 0) {
+              toast.success(`Automatically captured historical baselines for ${contestsToSnapshot.length} contest(s)`, { id: 'auto-snap' });
+            }
+            if (contestsToSeal.length > 0) {
+              toast.success(`Automatically sealed and saved final results for ${contestsToSeal.length} completed contest(s)`, { id: 'auto-seal' });
+            }
+          }
         } catch (error) {
-          console.error("Auto-snapshot historical fetch failed:", error);
-          toast.error("Auto-snapshot failed. Please trigger a manual snapshot.", { id: 'auto-snap' });
+          console.error("Auto-snapshot/seal historical fetch failed:", error);
+          toast.error("Auto-snapshot/seal failed. Please trigger a manual operation.", { id: 'auto-snap' });
         } finally {
           setSyncing(false);
         }
@@ -319,13 +405,208 @@ export default function Admin() {
     }
   };
 
+  const autoCompleteDraft = async (contestId: string) => {
+    const contest = contests.find(c => c.id === contestId);
+    if (!contest) return;
+
+    setSyncing(true);
+    toast.loading(`Simulating and completing draft for ${contest.theme_name}...`, { id: 'auto-draft' });
+
+    try {
+      // 1. Get or Generate draft order
+      let draftOrder = contest.draft_order || [];
+      if (draftOrder.length === 0) {
+        // If there are no users besides the current user, or fewer than 4, make sure demo users exist
+        let draftingUsers = [...users];
+        if (draftingUsers.length < 4) {
+          // Auto seed demo players if they aren't there so we have a good draft
+          const demoPlayers = [
+            { uid: 'demo_babe', display_name: 'Babe Ruth', email: 'babe@ballpark.com', total_cp: 350, role: 'player' as const },
+            { uid: 'demo_jackie', display_name: 'Jackie Robinson', email: 'jackie@ballpark.com', total_cp: 280, role: 'player' as const },
+            { uid: 'demo_ted', display_name: 'Ted Williams', email: 'ted@ballpark.com', total_cp: 420, role: 'player' as const },
+            { uid: 'demo_mickey', display_name: 'Mickey Mantle', email: 'mickey@ballpark.com', total_cp: 190, role: 'player' as const }
+          ];
+          const seedBatch = writeBatch(db);
+          demoPlayers.forEach(p => {
+            if (!draftingUsers.find(du => du.uid === p.uid)) {
+              seedBatch.set(doc(db, 'users', p.uid), p, { merge: true });
+              draftingUsers.push(p);
+            }
+          });
+          await seedBatch.commit();
+        }
+        draftOrder = draftingUsers.map(u => u.uid).sort(() => Math.random() - 0.5);
+      }
+
+      // 2. Simulate 3-round Snake Draft
+      const playerPicks: Record<string, any[]> = {};
+      draftOrder.forEach(uid => {
+        playerPicks[uid] = [];
+      });
+
+      const draftedTeamIds = new Set<string>();
+      const totalRounds = contest.selection_limit || 3;
+      let absolutePickNum = 0;
+
+      for (let r = 0; r < totalRounds; r++) {
+        // Snake draft turn order
+        const roundOrder = (r % 2 === 1) ? [...draftOrder].reverse() : [...draftOrder];
+        
+        for (const uid of roundOrder) {
+          // Find an available team
+          const availableTeams = MLB_TEAMS.filter(t => !draftedTeamIds.has(t.id));
+          if (availableTeams.length === 0) break;
+
+          // Pick a random team
+          const chosenTeam = availableTeams[Math.floor(Math.random() * availableTeams.length)];
+          draftedTeamIds.add(chosenTeam.id);
+
+          playerPicks[uid].push({
+            team_id: chosenTeam.id,
+            chips: 1,
+            side: 'over',
+            pick_number: absolutePickNum
+          });
+          absolutePickNum++;
+        }
+      }
+
+      // 3. Write entries to Firestore
+      const entriesBatch = writeBatch(db);
+      draftOrder.forEach(uid => {
+        const entryRef = doc(db, 'contests', contestId, 'entries', uid);
+        entriesBatch.set(entryRef, {
+          selections: playerPicks[uid],
+          score: 0,
+          is_valid: true,
+          last_updated: new Date().toISOString()
+        });
+      });
+
+      // 4. Handle starting stats baseline (especially for past contests)
+      let startingStats = contest.starting_stats;
+      let updatePayload: any = {
+        draft_order: draftOrder,
+        current_turn_index: absolutePickNum,
+        draft_status: 'completed',
+        last_updated: new Date().toISOString()
+      };
+
+      if (!startingStats) {
+        toast.loading(`Capturing baseline stats for ${contest.theme_name}...`, { id: 'auto-draft' });
+        const startDate = parseDate(contest.start_time);
+        const baselineDate = new Date(startDate);
+        baselineDate.setDate(baselineDate.getDate() - 1);
+        const dateStr = baselineDate.toISOString().split('T')[0];
+
+        try {
+          const historicalStats = await fetchMLBStatsForDate(dateStr, false);
+          const statsMap: Record<string, number> = {};
+          const dpMap: Record<string, number> = {};
+          const csMap: Record<string, number> = {};
+          const errMap: Record<string, number> = {};
+
+          MLB_TEAMS.forEach(team => {
+            const stats = historicalStats[team.id];
+            if (stats) {
+              statsMap[team.id] = stats[contest.metric_key as keyof typeof stats] || 0;
+              if (contest.metric_key === 'defense') {
+                dpMap[team.id] = stats.doublePlays || 0;
+                csMap[team.id] = stats.caughtStealing || 0;
+                errMap[team.id] = stats.errors || 0;
+              }
+            } else {
+              statsMap[team.id] = 0;
+              if (contest.metric_key === 'defense') {
+                dpMap[team.id] = 0;
+                csMap[team.id] = 0;
+                errMap[team.id] = 0;
+              }
+            }
+          });
+
+          updatePayload.starting_stats = statsMap;
+          updatePayload.baseline_date = dateStr;
+          updatePayload.auto_snapshotted = true;
+          if (contest.metric_key === 'defense') {
+            updatePayload.starting_doublePlays = dpMap;
+            updatePayload.starting_caughtStealing = csMap;
+            updatePayload.starting_errors = errMap;
+          }
+        } catch (baselineErr) {
+          console.error("Failed to fetch historical starting stats baseline during auto-draft:", baselineErr);
+          const fallbackMap: Record<string, number> = {};
+          MLB_TEAMS.forEach(t => {
+            fallbackMap[t.id] = 0;
+          });
+          updatePayload.starting_stats = fallbackMap;
+        }
+      }
+
+      // If the contest is already completed by end date, let's also take the ending snapshot!
+      const now = new Date();
+      const endTime = parseDate(contest.end_time);
+      if (endTime <= now && !contest.ending_stats) {
+        toast.loading(`Capturing final results for completed contest ${contest.theme_name}...`, { id: 'auto-draft' });
+        const dateStr = endTime.toISOString().split('T')[0];
+        try {
+          const historicalStats = await fetchMLBStatsForDate(dateStr, false);
+          const statsMap: Record<string, number> = {};
+          const dpMap: Record<string, number> = {};
+          const csMap: Record<string, number> = {};
+          const errMap: Record<string, number> = {};
+
+          MLB_TEAMS.forEach(team => {
+            const stats = historicalStats[team.id];
+            if (stats) {
+              statsMap[team.id] = stats[contest.metric_key as keyof typeof stats] || 0;
+              if (contest.metric_key === 'defense') {
+                dpMap[team.id] = stats.doublePlays || 0;
+                csMap[team.id] = stats.caughtStealing || 0;
+                errMap[team.id] = stats.errors || 0;
+              }
+            } else {
+              statsMap[team.id] = 0;
+              if (contest.metric_key === 'defense') {
+                dpMap[team.id] = 0;
+                csMap[team.id] = 0;
+                errMap[team.id] = 0;
+              }
+            }
+          });
+
+          updatePayload.ending_stats = statsMap;
+          updatePayload.results_sealed = true;
+          if (contest.metric_key === 'defense') {
+            updatePayload.ending_doublePlays = dpMap;
+            updatePayload.ending_caughtStealing = csMap;
+            updatePayload.ending_errors = errMap;
+          }
+        } catch (endingErr) {
+          console.error("Failed to fetch historical ending stats during auto-draft:", endingErr);
+        }
+      }
+
+      entriesBatch.update(doc(db, 'contests', contestId), updatePayload);
+      await entriesBatch.commit();
+
+      toast.success(`Draft successfully simulated and finalized for ${contest.theme_name}!`, { id: 'auto-draft' });
+    } catch (error: any) {
+      console.error("Error auto-completing draft:", error);
+      toast.error(`Auto-draft failed: ${error.message}`, { id: 'auto-draft' });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const fetchMLBStatsForDate = async (dateStr: string, showToasts = true) => {
+    const season = dateStr.split('-')[0];
+    const apiDateStr = dateStr;
+
     if (showToasts) toast.loading(`Fetching historical MLB stats for ${dateStr}...`, { id: 'hist-sync' });
     
-    const season = dateStr.split('-')[0];
-    
     // 1. Fetch Standings as of date (for Wins/Losses)
-    const standingsRes = await fetch(`https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=${season}&date=${dateStr}&standingsTypes=regularSeason`);
+    const standingsRes = await fetch(`https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=${season}&date=${apiDateStr}&standingsTypes=regularSeason`);
     const standingsData = await standingsRes.json();
     
     const teamStats: Record<string, any> = {};
@@ -345,7 +626,7 @@ export default function Admin() {
     const statsPromises = MLB_TEAMS.map(async (team) => {
       try {
         // Fetch hitting gameLog
-        const hitRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=gameLog&group=hitting&season=${season}&endDate=${dateStr}&gameType=R`);
+        const hitRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=gameLog&group=hitting&season=${season}&endDate=${apiDateStr}&gameType=R`);
         const hitData = await hitRes.json();
         
         let totalHRs = 0;
@@ -356,7 +637,7 @@ export default function Admin() {
         });
 
         // Fetch pitching gameLog
-        const pitchRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=gameLog&group=pitching&season=${season}&endDate=${dateStr}&gameType=R`);
+        const pitchRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=gameLog&group=pitching&season=${season}&endDate=${apiDateStr}&gameType=R`);
         const pitchData = await pitchRes.json();
         
         let totalKs = 0;
@@ -365,7 +646,7 @@ export default function Admin() {
         });
 
         // Fetch fielding gameLog
-        const fieldRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=gameLog&group=fielding&season=${season}&endDate=${dateStr}&gameType=R`);
+        const fieldRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=gameLog&group=fielding&season=${season}&endDate=${apiDateStr}&gameType=R`);
         const fieldData = await fieldRes.json();
         let totalDPs = 0;
         let totalErrors = 0;
@@ -375,7 +656,7 @@ export default function Admin() {
         });
 
         // Fetch catching gameLog
-        const catchRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=gameLog&group=catching&season=${season}&endDate=${dateStr}&gameType=R`);
+        const catchRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=gameLog&group=catching&season=${season}&endDate=${apiDateStr}&gameType=R`);
         const catchData = await catchRes.json();
         let totalCS = 0;
         catchData.stats?.[0]?.splits?.forEach((split: any) => {
@@ -707,12 +988,14 @@ export default function Admin() {
   const performMLBSync = async (showToasts = true) => {
     if (showToasts) toast.loading("Fetching MLB Standings...", { id: 'sync-status' });
     
+    const syncSeason = "2026";
+    
     // 1. Fetch Standings (Wins/Losses)
-    const standingsRes = await fetch("https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=2026&standingsTypes=regularSeason");
+    const standingsRes = await fetch(`https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=${syncSeason}&standingsTypes=regularSeason`);
     const standingsData = await standingsRes.json();
     
     if (!standingsData.records || standingsData.records.length === 0) {
-      throw new Error("No standings records found in MLB API for 2026.");
+      throw new Error(`No standings records found in MLB API for ${syncSeason}.`);
     }
 
     if (showToasts) toast.loading("Fetching Team Performance Data...", { id: 'sync-status' });
@@ -744,22 +1027,22 @@ export default function Admin() {
         const tid = team.id.toString();
         
         // Fetch Team Hitting Season Stats
-        const hitRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=season&group=hitting&season=2026&gameType=R`);
+        const hitRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=season&group=hitting&season=${syncSeason}&gameType=R`);
         const hitData = await hitRes.json();
         const hitStat = hitData.stats?.[0]?.splits?.[0]?.stat;
         
         // Fetch Team Pitching Season Stats
-        const pitchRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=season&group=pitching&season=2026&gameType=R`);
+        const pitchRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=season&group=pitching&season=${syncSeason}&gameType=R`);
         const pitchData = await pitchRes.json();
         const pitchStat = pitchData.stats?.[0]?.splits?.[0]?.stat;
 
         // Fetch Team Fielding Season Stats (Double Plays & Errors)
-        const fieldRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=season&group=fielding&season=2026&gameType=R`);
+        const fieldRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=season&group=fielding&season=${syncSeason}&gameType=R`);
         const fieldData = await fieldRes.json();
         const fieldStat = fieldData.stats?.[0]?.splits?.[0]?.stat;
 
         // Fetch Team Catching Season Stats (Caught Stealing)
-        const catchRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=season&group=catching&season=2026&gameType=R`);
+        const catchRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=season&group=catching&season=${syncSeason}&gameType=R`);
         const catchData = await catchRes.json();
         const catchStat = catchData.stats?.[0]?.splits?.[0]?.stat;
 
@@ -1085,6 +1368,37 @@ export default function Admin() {
     }
   };
 
+  const seedDemoUsersOnly = async () => {
+    setLoading(true);
+    const toastId = toast.loading('Seeding legendary MLB demo players...');
+    try {
+      const batch = writeBatch(db);
+      const demoPlayers = [
+        { uid: 'demo_babe', display_name: 'Babe Ruth', email: 'babe@ballpark.com', total_cp: 350, role: 'player' as const },
+        { uid: 'demo_jackie', display_name: 'Jackie Robinson', email: 'jackie@ballpark.com', total_cp: 280, role: 'player' as const },
+        { uid: 'demo_ted', display_name: 'Ted Williams', email: 'ted@ballpark.com', total_cp: 420, role: 'player' as const },
+        { uid: 'demo_mickey', display_name: 'Mickey Mantle', email: 'mickey@ballpark.com', total_cp: 190, role: 'player' as const }
+      ];
+
+      demoPlayers.forEach(player => {
+        const userRef = doc(db, 'users', player.uid);
+        batch.set(userRef, {
+          display_name: player.display_name,
+          email: player.email,
+          total_cp: player.total_cp,
+          role: player.role
+        }, { merge: true });
+      });
+
+      await batch.commit();
+      toast.success('Roster filled with legendary demo players!', { id: toastId });
+    } catch (error: any) {
+      toast.error(`Failed to seed demo players: ${error.message}`, { id: toastId });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const deleteAllEntries = async () => {
     setLoading(true);
     try {
@@ -1269,6 +1583,29 @@ export default function Admin() {
             >
               <Database size={16} />
               {loading ? 'Seeding...' : 'Full System Seed'}
+            </button>
+          </div>
+        </div>
+
+        <div className="p-4 md:p-6 bg-slate-50 rounded-2xl border-2 border-slate-200">
+          <div className="flex items-center gap-3 mb-4">
+            <Users className="text-emerald-600 md:w-[24px] md:h-[24px]" size={20} />
+            <div>
+              <h3 className="font-varsity text-sm text-slate-900 uppercase tracking-tight">Seed Demo Players</h3>
+              <p className="text-[10px] font-varsity text-slate-400 uppercase tracking-widest">Roster Management</p>
+            </div>
+          </div>
+          <p className="text-[10px] font-varsity text-slate-500 leading-relaxed mb-6 uppercase tracking-widest opacity-70">
+            Seed legendary Hall-of-Fame players (Babe Ruth, Jackie Robinson, Ted Williams, Mickey Mantle) as demo users to run fantasy drafts and fill the leaderboard!
+          </p>
+          <div className="grid grid-cols-1 gap-2">
+            <button
+              onClick={seedDemoUsersOnly}
+              disabled={loading}
+              className="w-full px-4 py-2 bg-emerald-50 hover:bg-emerald-100 border-2 border-emerald-200 text-emerald-700 text-[10px] font-varsity uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-3"
+            >
+              <Users size={16} />
+              {loading ? 'Seeding...' : 'Seed Demo Players'}
             </button>
           </div>
         </div>
@@ -1778,7 +2115,7 @@ export default function Admin() {
                              )}
                           </div>
 
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid grid-cols-2 gap-2 mt-4">
                             <button
                               onClick={() => generateDraftOrder(c.id)}
                               className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all flex items-center justify-center gap-2 border border-slate-700 shadow-sm"
@@ -1793,6 +2130,15 @@ export default function Admin() {
                             >
                               <Play size={14} fill="currentColor" />
                               KICK OFF DRAFT
+                            </button>
+
+                            <button
+                              onClick={() => autoCompleteDraft(c.id)}
+                              disabled={c.draft_status === 'completed'}
+                              className="px-3 py-2 col-span-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-20 text-white text-[9px] font-black uppercase tracking-widest rounded-lg transition-all flex items-center justify-center gap-2 shadow-inner active:scale-95"
+                            >
+                              <Sparkles size={14} fill="currentColor" className="text-amber-300" />
+                              AUTO-COMPLETE DRAFT (SIMULATE)
                             </button>
                           </div>
                        </div>

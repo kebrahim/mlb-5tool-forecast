@@ -15,7 +15,7 @@
   },
   "firestore": [
     {
-      "database": "ai-studio-mlb5toolforecast-207f0298-781b-4bac-94a6-5f7b99e6c25c",
+      "database": "(default)",
       "rules": "firestore.rules"
     }
   ]

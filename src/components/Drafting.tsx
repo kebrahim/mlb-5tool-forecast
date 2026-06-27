@@ -40,8 +40,24 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 
 const parseDate = (date: any): Date => {
   if (!date) return new Date();
-  if (date.toDate && typeof date.toDate === 'function') return date.toDate();
-  return new Date(date);
+  if (date instanceof Date) return date;
+  if (typeof date.toDate === 'function') return date.toDate();
+  if (date && typeof date === 'object') {
+    if (typeof date.seconds === 'number') {
+      return new Date(date.seconds * 1000);
+    }
+    if (typeof date._seconds === 'number') {
+      return new Date(date._seconds * 1000);
+    }
+    if ('seconds' in date && typeof date.seconds === 'number') {
+      return new Date(date.seconds * 1000);
+    }
+  }
+  if (typeof date === 'string' || typeof date === 'number') {
+    const d = new Date(date);
+    if (!isNaN(d.getTime())) return d;
+  }
+  return new Date();
 };
 
 interface DraftingProps {
@@ -536,16 +552,16 @@ function ContestSelector({
     const start = parseDate(c.start_time);
     const end = parseDate(c.end_time);
 
-    if (c.is_draft) {
+    if (now > end) {
+      return { label: 'Completed', color: 'text-slate-500 bg-slate-500/10' };
+    } else if (c.is_draft) {
       if (c.draft_status === 'completed') {
-        if (now > end) return { label: 'Completed', color: 'text-slate-500 bg-slate-500/10' };
         if (now > start) return { label: 'Live', color: 'text-emerald-500 bg-emerald-500/10' };
         return { label: 'Drafted', color: 'text-blue-500 bg-blue-500/10' };
       }
       if (c.draft_status === 'in_progress') return { label: 'Drafting', color: 'text-amber-500 bg-amber-500/10 animate-pulse' };
       return { label: 'Upcoming', color: 'text-slate-400 bg-slate-400/10' };
     } else {
-      if (now > end) return { label: 'Completed', color: 'text-slate-500 bg-slate-500/10' };
       if (now > start) return { label: 'Live', color: 'text-emerald-500 bg-emerald-500/10' };
       return { label: 'Open', color: 'text-amber-500 bg-amber-500/10' };
     }

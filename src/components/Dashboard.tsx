@@ -43,8 +43,24 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 
 const parseDate = (date: any): Date => {
   if (!date) return new Date();
-  if (date.toDate && typeof date.toDate === 'function') return date.toDate();
-  return new Date(date);
+  if (date instanceof Date) return date;
+  if (typeof date.toDate === 'function') return date.toDate();
+  if (date && typeof date === 'object') {
+    if (typeof date.seconds === 'number') {
+      return new Date(date.seconds * 1000);
+    }
+    if (typeof date._seconds === 'number') {
+      return new Date(date._seconds * 1000);
+    }
+    if ('seconds' in date && typeof date.seconds === 'number') {
+      return new Date(date.seconds * 1000);
+    }
+  }
+  if (typeof date === 'string' || typeof date === 'number') {
+    const d = new Date(date);
+    if (!isNaN(d.getTime())) return d;
+  }
+  return new Date();
 };
 
 export default function Dashboard() {
@@ -248,7 +264,10 @@ export default function Dashboard() {
 
     // Contests
     const unsubContests = onSnapshot(collection(db, 'contests'), (snap) => {
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Contest));
+      const mlbContestIds = ['season_2026', 'april_2026', 'may_2026', 'june_2026', 'july_2026'];
+      const list = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as Contest))
+        .filter(c => mlbContestIds.includes(c.id));
       const sortedList = [...list].sort((a, b) => parseDate(a.end_time).getTime() - parseDate(b.end_time).getTime());
       setContests(sortedList);
       
@@ -426,10 +445,11 @@ export default function Dashboard() {
 
     let statusIdentifier: 'completed' | 'live' | 'drafted' | 'drafting' | 'upcoming' | 'open' = 'upcoming';
 
-    if (c.is_draft) {
+    if (now > end) {
+      statusIdentifier = 'completed';
+    } else if (c.is_draft) {
       if (c.draft_status === 'completed') {
-        if (now > end) statusIdentifier = 'completed';
-        else if (now > start) statusIdentifier = 'live';
+        if (now > start) statusIdentifier = 'live';
         else statusIdentifier = 'drafted';
       } else if (c.draft_status === 'in_progress') {
         statusIdentifier = 'drafting';
@@ -437,8 +457,7 @@ export default function Dashboard() {
         statusIdentifier = 'upcoming';
       }
     } else {
-      if (now > end) statusIdentifier = 'completed';
-      else if (now > start) statusIdentifier = 'live';
+      if (now > start) statusIdentifier = 'live';
       else statusIdentifier = 'open';
     }
 

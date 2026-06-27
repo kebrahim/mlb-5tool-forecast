@@ -24,12 +24,38 @@ async function startServer() {
   const PORT = Number(process.env.PORT) || 3000;
 
   // Debug route
-  app.get("/api/db-info", (req, res) => {
-    res.json({ 
-      projectId: firebaseConfig.projectId,
-      databaseId: firebaseConfig.firestoreDatabaseId,
-      dbDatabaseId: (db as any)._databaseId || (db as any).databaseId || "unknown"
-    });
+  app.get("/api/db-info", async (req, res) => {
+    try {
+      const defaultDb = getFirestore(firebaseConfig.firestoreDatabaseId || "(default)");
+      const defaultUsersSnap = await defaultDb.collection('users').get();
+
+      res.json({ 
+        projectId: firebaseConfig.projectId,
+        databaseId: firebaseConfig.firestoreDatabaseId || "(default)",
+        defaultDatabaseUserCount: defaultUsersSnap.size,
+        defaultUsers: defaultUsersSnap.docs.map(d => ({ id: d.id, display_name: d.data().display_name || d.data().username }))
+      });
+    } catch (err: any) {
+      res.json({
+        error: err.message,
+        projectId: firebaseConfig.projectId,
+        databaseId: firebaseConfig.firestoreDatabaseId || "(default)"
+      });
+    }
+  });
+
+  app.get("/api/contest-detail", async (req, res) => {
+    try {
+      const contestId = req.query.contestId as string || "may_2026";
+      const defaultDb = getFirestore(firebaseConfig.firestoreDatabaseId || "(default)");
+      const docSnap = await defaultDb.collection('contests').doc(contestId).get();
+      if (!docSnap.exists) {
+        return res.status(404).json({ error: "Contest not found" });
+      }
+      return res.json({ id: docSnap.id, ...docSnap.data() });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
   });
 
   // The MLB Stats Sync has been moved to the frontend (Admin.tsx) 
