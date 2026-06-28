@@ -556,13 +556,14 @@ function ContestSelector({
       return { label: 'Completed', color: 'text-slate-500 bg-slate-500/10' };
     } else if (c.is_draft) {
       if (c.draft_status === 'completed') {
-        if (now > start) return { label: 'Live', color: 'text-emerald-500 bg-emerald-500/10' };
+        if (now > start) return { label: 'In Progress', color: 'text-emerald-500 bg-emerald-500/10' };
         return { label: 'Drafted', color: 'text-blue-500 bg-blue-500/10' };
       }
       if (c.draft_status === 'in_progress') return { label: 'Drafting', color: 'text-amber-500 bg-amber-500/10 animate-pulse' };
+      if (now > start) return { label: 'In Progress', color: 'text-emerald-500 bg-emerald-500/10' };
       return { label: 'Upcoming', color: 'text-slate-400 bg-slate-400/10' };
     } else {
-      if (now > start) return { label: 'Live', color: 'text-emerald-500 bg-emerald-500/10' };
+      if (now > start) return { label: 'In Progress', color: 'text-emerald-500 bg-emerald-500/10' };
       return { label: 'Open', color: 'text-amber-500 bg-amber-500/10' };
     }
   };
@@ -667,7 +668,9 @@ export default function Drafting({ contest, contests, onContestChange }: Draftin
   ) : null;
 
   const isMyTurn = activePlayerUid === auth.currentUser?.uid && contest.draft_status === 'in_progress';
-  const isAdmin = users.find(u => u.uid === auth.currentUser?.uid)?.role === 'admin';
+  const isAdmin = users.find(u => u.uid === auth.currentUser?.uid)?.role === 'admin' ||
+                  auth.currentUser?.email?.toLowerCase() === 'kebrahim@gmail.com' ||
+                  auth.currentUser?.email?.toLowerCase() === 'kara.ebrahim@gmail.com';
 
   const totalChips = selections.reduce((sum, s) => sum + s.chips, 0);
   const isValidCount = selections.length === contest.selection_limit;
@@ -909,6 +912,21 @@ export default function Drafting({ contest, contests, onContestChange }: Draftin
     }
   };
 
+  const handleFixDraftIndex = async () => {
+    if (!isAdmin) return;
+    setSaving(true);
+    try {
+      await setDoc(doc(db, 'contests', contest.id), {
+        current_turn_index: allSelections.length
+      }, { merge: true });
+      toast.success(`Draft turn index successfully synced to ${allSelections.length}!`);
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) return (
     <div className="flex flex-col items-center justify-center p-20 space-y-6">
       <div className="w-16 h-16 border-4 border-slate-200 border-t-stitch rounded-full animate-spin" />
@@ -954,6 +972,33 @@ export default function Drafting({ contest, contests, onContestChange }: Draftin
       </div>
 
       <div className="px-4 md:px-8 pb-8 max-w-7xl mx-auto mt-8">
+        {isAdmin && contest.is_draft && contest.draft_status === 'in_progress' && allSelections.length !== currentTurnIndex && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8 bg-amber-50 border-4 border-amber-500/30 p-6 rounded-3xl flex flex-col md:flex-row justify-between items-center gap-4 shadow-lg"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-amber-500 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-md">
+                <AlertCircle size={24} />
+              </div>
+              <div>
+                <h4 className="text-lg font-varsity text-amber-800 uppercase tracking-tight">Draft Turn Index Out of Sync</h4>
+                <p className="text-slate-600 text-xs font-scorebook mt-1">
+                  There are {allSelections.length} picks made, but the draft state says turn #{currentTurnIndex + 1}. This usually happens if the draft order was re-seeded.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleFixDraftIndex}
+              disabled={saving}
+              className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-varsity text-xs uppercase tracking-widest rounded-xl transition-all shadow-md shrink-0 cursor-pointer disabled:opacity-50"
+            >
+              {saving ? 'Syncing...' : 'Fix Turn Index'}
+            </button>
+          </motion.div>
+        )}
+
         {timeLeft === 'COMPLETED' && (
           <motion.div 
             initial={{ opacity: 0, y: -20 }}

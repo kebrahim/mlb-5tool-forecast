@@ -81,11 +81,15 @@ export default function Dashboard() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [autoSeeding, setAutoSeeding] = useState(false);
+  const [teamsLoaded, setTeamsLoaded] = useState(false);
+  const [contestsLoaded, setContestsLoaded] = useState(false);
 
   useEffect(() => {
     const isAdmin = user?.role === 'admin' || currentUserEmail?.toLowerCase() === 'kebrahim@gmail.com';
     if (
       isAdmin &&
+      teamsLoaded &&
+      contestsLoaded &&
       teams.length === 0 &&
       contests.length === 0 &&
       !autoSeeding
@@ -205,7 +209,7 @@ export default function Dashboard() {
       };
       runAutoSeed();
     }
-  }, [user, currentUserEmail, teams.length, contests.length, autoSeeding]);
+  }, [user, currentUserEmail, teamsLoaded, contestsLoaded, teams.length, contests.length, autoSeeding]);
 
   useEffect(() => {
     if (view === 'standings' && !activeContest && contests.length > 0) {
@@ -258,8 +262,10 @@ export default function Dashboard() {
     // Teams
     const unsubTeams = onSnapshot(collection(db, 'team_lines'), (snap) => {
       setTeams(snap.docs.map(d => ({ id: d.id, ...d.data() } as TeamLine)).sort((a, b) => a.team_name.localeCompare(b.team_name)));
+      setTeamsLoaded(true);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'team_lines');
+      setTeamsLoaded(true);
     });
 
     // Contests
@@ -274,15 +280,17 @@ export default function Dashboard() {
       setActiveContest(prev => {
         if (prev) {
           const current = sortedList.find(c => c.id === prev.id);
-          if (current && current.is_active) {
+          if (current) {
             return current;
           }
         }
         const defaultContest = sortedList.find(c => c.id === 'april_2026' && c.is_active) || sortedList.find(c => c.is_active) || null;
         return defaultContest;
       });
+      setContestsLoaded(true);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'contests');
+      setContestsLoaded(true);
     });
 
     // Leaderboard
@@ -454,7 +462,8 @@ export default function Dashboard() {
       } else if (c.draft_status === 'in_progress') {
         statusIdentifier = 'drafting';
       } else {
-        statusIdentifier = 'upcoming';
+        if (now > start) statusIdentifier = 'live';
+        else statusIdentifier = 'upcoming';
       }
     } else {
       if (now > start) statusIdentifier = 'live';
@@ -463,7 +472,7 @@ export default function Dashboard() {
 
     const configs = {
       completed: { label: 'Completed', color: 'text-slate-500 bg-slate-500/10' },
-      live: { label: 'Live', color: 'text-emerald-500 bg-emerald-500/10' },
+      live: { label: 'In Progress', color: 'text-emerald-500 bg-emerald-500/10' },
       drafted: { label: 'Drafted', color: 'text-blue-500 bg-blue-500/10' },
       drafting: { label: 'Drafting', color: 'text-amber-500 bg-amber-500/10' },
       upcoming: { label: 'Upcoming', color: 'text-slate-400 bg-slate-400/10' },
