@@ -76,6 +76,7 @@ function SnakeDraftRoom({
   isMyTurn, 
   activePlayerUid,
   allSelections,
+  isAdmin,
   onDraft 
 }: { 
   contest: Contest, 
@@ -87,12 +88,14 @@ function SnakeDraftRoom({
   isMyTurn: boolean, 
   activePlayerUid: string | null,
   allSelections: {teamId: string, userId: string, pickNumber: number}[],
+  isAdmin: boolean,
   onDraft: (teamId: string) => void 
 }) {
   const numPlayers = contest.draft_order?.length || 0;
   const currentTurnIndex = contest.current_turn_index || 0;
   const round = Math.floor(currentTurnIndex / (numPlayers || 1));
   const [isBoardExpanded, setIsBoardExpanded] = useState(true);
+  const canAdminDraft = isAdmin && contest.draft_status === 'in_progress';
 
   const formatMetric = (key: string) => {
     switch (key.toLowerCase()) {
@@ -295,15 +298,17 @@ function SnakeDraftRoom({
 
               <button
                 onClick={() => onDraft(team.id)}
-                disabled={isTaken || isSelected || !isMyTurn || isLocked}
+                disabled={isTaken || isSelected || (!isMyTurn && !canAdminDraft) || isLocked}
                 className={`w-full py-4 rounded-2xl text-sm font-varsity uppercase tracking-widest transition-all flex items-center justify-center gap-3 ${
                   isSelected 
                     ? 'bg-emerald-600 text-white cursor-default' 
                     : isTaken 
                       ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                       : isMyTurn
-                        ? 'bg-slate-900 text-white hover:bg-slate-800 shadow-lg active:scale-95'
-                        : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                        ? 'bg-slate-900 text-white hover:bg-slate-800 shadow-lg active:scale-95 cursor-pointer'
+                        : canAdminDraft
+                          ? 'bg-amber-500 text-slate-950 hover:bg-amber-600 shadow-lg active:scale-95 cursor-pointer'
+                          : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                 }`}
               >
                 {isSelected ? (
@@ -312,6 +317,8 @@ function SnakeDraftRoom({
                   'UNAVAILABLE'
                 ) : isMyTurn ? (
                   <><ArrowRight size={20} /> DRAFT TEAM</>
+                ) : canAdminDraft ? (
+                  <><AlertCircle size={20} /> ADMIN DRAFT</>
                 ) : contest.draft_status === 'completed' ? (
                   'DRAFT COMPLETED'
                 ) : (
@@ -808,19 +815,35 @@ export default function Drafting({ contest, contests, onContestChange }: Draftin
   const handleSideChange = async (teamId: string, side: 'over' | 'under') => {
     if (isLocked) return;
     if (contest.is_draft) {
-      if (!isMyTurn) { toast.error("It's not your turn to draft!"); return; }
+      const targetUserUid = activePlayerUid;
+      if (!targetUserUid) { toast.error("No active player to draft for!"); return; }
+
+      const isAdminOverriding = isAdmin && contest.draft_status === 'in_progress';
+      if (!isMyTurn && !isAdminOverriding) { toast.error("It's not your turn to draft!"); return; }
       if (takenTeams.has(teamId)) { toast.error('This team has already been drafted!'); return; }
-      if (selections.find(s => s.team_id === teamId)) { toast.error('You already selected this team!'); return; }
-      if (selections.length >= contest.selection_limit) { toast.error(`You have already drafted ${contest.selection_limit} teams!`); return; }
+
+      // Reconstruct target user selections from allSelections
+      const targetUserSelections: Selection[] = allSelections
+        .filter(s => s.userId === targetUserUid)
+        .map(s => ({
+          team_id: s.teamId,
+          chips: 1,
+          side: 'over',
+          pick_number: s.pickNumber
+        }));
+
+      if (targetUserSelections.find(s => s.team_id === teamId)) { toast.error('This team has already been selected by this player!'); return; }
+      if (targetUserSelections.length >= contest.selection_limit) { toast.error(`This player has already drafted ${contest.selection_limit} teams!`); return; }
+      
       setSaving(true);
       try {
-        const newSelections = [...selections, { 
+        const newSelections = [...targetUserSelections, { 
           team_id: teamId, 
           chips: 1, 
           side: 'over',
           pick_number: currentTurnIndex 
         }];
-        const entryRef = doc(db, 'contests', contest.id, 'entries', auth.currentUser!.uid);
+        const entryRef = doc(db, 'contests', contest.id, 'entries', targetUserUid);
         const contestRef = doc(db, 'contests', contest.id);
         
         const nextTurnIndex = currentTurnIndex + 1;
@@ -840,9 +863,14 @@ export default function Drafting({ contest, contests, onContestChange }: Draftin
         
         await batch.commit();
         
-        setSelections(newSelections);
-        setSavedSelections(newSelections);
-        toast.success(`Drafted ${teams.find(t => t.id === teamId)?.team_name}!`);
+        if (targetUserUid === auth.currentUser?.uid) {
+          setSelections(newSelections);
+          setSavedSelections(newSelections);
+        }
+        
+        const targetUserObj = users.find(u => u.uid === targetUserUid);
+        const targetDisplayName = targetUserObj?.display_name || targetUserObj?.email || 'Contestant';
+        toast.success(`Drafted ${teams.find(t => t.id === teamId)?.team_name} on behalf of ${targetDisplayName}!`);
       } catch (error: any) { 
         handleFirestoreError(error, OperationType.WRITE, `contests/${contest.id}`);
         toast.error(error.message); 
@@ -1056,6 +1084,7 @@ export default function Drafting({ contest, contests, onContestChange }: Draftin
             isMyTurn={isMyTurn}
             activePlayerUid={activePlayerUid}
             allSelections={allSelections}
+            isAdmin={isAdmin}
             onDraft={(teamId) => handleSideChange(teamId, 'over')}
           />
         ) : (
