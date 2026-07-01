@@ -133,6 +133,75 @@ export default function Admin() {
   // Auto-snapshot logic for contests that have started but have no starting_stats, and completed contests with no ending_stats
   useEffect(() => {
     const checkAutoSnapshots = async () => {
+      // Proactive Auto-Repair for July Contest if starting_caughtStealing is corrupted/inflated (e.g., LAA is 19 instead of 15)
+      const julyContest = contests.find(c => c.id === 'july_2026');
+      if (julyContest && julyContest.starting_caughtStealing) {
+        const isCorrupted = julyContest.starting_caughtStealing["108"] === 19;
+        if (isCorrupted && !syncing) {
+          console.log("Detected corrupted (multiplied) July contest starting baseline. Triggering silent repair...");
+          try {
+            setSyncing(true);
+            toast.loading("Repairing July contest baseline data...", { id: 'july-repair' });
+            
+            // 1. Re-run starting stats snapshot for July
+            const startDate = parseDate(julyContest.start_time);
+            const baselineDate = new Date(startDate);
+            baselineDate.setDate(baselineDate.getDate() - 1);
+            const dateStr = baselineDate.toISOString().split('T')[0];
+            
+            const historicalStats = await fetchMLBStatsForDate(dateStr, false);
+            
+            const statsMap: Record<string, number> = {};
+            const dpMap: Record<string, number> = {};
+            const csMap: Record<string, number> = {};
+            const errMap: Record<string, number> = {};
+
+            MLB_TEAMS.forEach(team => {
+              const stats = historicalStats[team.id];
+              if (stats) {
+                statsMap[team.id] = stats[julyContest.metric_key as keyof typeof stats] || 0;
+                if (julyContest.metric_key === 'defense') {
+                  dpMap[team.id] = stats.doublePlays || 0;
+                  csMap[team.id] = stats.caughtStealing || 0;
+                  errMap[team.id] = stats.errors || 0;
+                }
+              } else {
+                statsMap[team.id] = 0;
+                if (julyContest.metric_key === 'defense') {
+                  dpMap[team.id] = 0;
+                  csMap[team.id] = 0;
+                  errMap[team.id] = 0;
+                }
+              }
+            });
+
+            const updatePayload: any = {
+              starting_stats: statsMap,
+              baseline_date: dateStr,
+              last_updated: new Date().toISOString()
+            };
+            if (julyContest.metric_key === 'defense') {
+              updatePayload.starting_doublePlays = dpMap;
+              updatePayload.starting_caughtStealing = csMap;
+              updatePayload.starting_errors = errMap;
+            }
+
+            await updateDoc(doc(db, 'contests', 'july_2026'), updatePayload);
+            
+            // 2. Sync latest team lines with corrected unmultiplied values
+            await performMLBSync(false);
+            
+            toast.success("July contest baseline and live team stats repaired successfully!", { id: 'july-repair' });
+          } catch (repairErr) {
+            console.error("Failed to repair July contest:", repairErr);
+            toast.error("Failed to automatically repair July contest baseline. Please run manual operations.", { id: 'july-repair' });
+          } finally {
+            setSyncing(false);
+          }
+          return;
+        }
+      }
+
       const now = new Date();
       const contestsToSnapshot = contests.filter(c => 
         c.metric_key !== 'wins' && 
@@ -641,8 +710,10 @@ export default function Admin() {
         const pitchData = await pitchRes.json();
         
         let totalKs = 0;
+        let totalCS = 0;
         pitchData.stats?.[0]?.splits?.forEach((split: any) => {
           totalKs += split.stat?.strikeOuts || 0;
+          totalCS += split.stat?.caughtStealing || 0;
         });
 
         // Fetch fielding gameLog
@@ -653,14 +724,6 @@ export default function Admin() {
         fieldData.stats?.[0]?.splits?.forEach((split: any) => {
           totalDPs += split.stat?.doublePlays || 0;
           totalErrors += split.stat?.errors || 0;
-        });
-
-        // Fetch catching gameLog
-        const catchRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=gameLog&group=catching&season=${season}&endDate=${apiDateStr}&gameType=R`);
-        const catchData = await catchRes.json();
-        let totalCS = 0;
-        catchData.stats?.[0]?.splits?.forEach((split: any) => {
-          totalCS += split.stat?.caughtStealing || 0;
         });
         
         return {
@@ -1041,11 +1104,6 @@ export default function Admin() {
         const fieldData = await fieldRes.json();
         const fieldStat = fieldData.stats?.[0]?.splits?.[0]?.stat;
 
-        // Fetch Team Catching Season Stats (Caught Stealing)
-        const catchRes = await fetch(`https://statsapi.mlb.com/api/v1/teams/${team.id}/stats?stats=season&group=catching&season=${syncSeason}&gameType=R`);
-        const catchData = await catchRes.json();
-        const catchStat = catchData.stats?.[0]?.splits?.[0]?.stat;
-
         if (teamStatsMap[tid]) {
           teamStatsMap[tid].hrs = hitStat?.homeRuns || 0;
           teamStatsMap[tid].stolenBases = hitStat?.stolenBases || 0;
@@ -1053,7 +1111,7 @@ export default function Admin() {
           
           const dps = fieldStat?.doublePlays || 0;
           const errs = fieldStat?.errors || 0;
-          const cs = catchStat?.caughtStealing || 0;
+          const cs = fieldStat?.caughtStealing || 0;
           
           teamStatsMap[tid].doublePlays = dps;
           teamStatsMap[tid].caughtStealing = cs;
