@@ -425,11 +425,32 @@ export default function Dashboard() {
               score += (activeContest.use_chips ? (sel.chips || 0) : 1);
             }
           } else {
-            // For total count contests (drafts), score is sum of metric values
-            const endVal = activeContest.ending_stats?.[team.id];
-            const val = endVal !== undefined ? endVal : (team.stats[activeContest.metric_key as keyof typeof team.stats] || 0);
-            const startVal = activeContest.starting_stats?.[team.id] || 0;
-            score += isStarted ? Math.max(0, val - startVal) : 0;
+            if (activeContest.metric_key === 'defense') {
+              const startDP = (activeContest as any).starting_doublePlays?.[team.id] || 0;
+              const startCS = (activeContest as any).starting_caughtStealing?.[team.id] || 0;
+              const startErr = (activeContest as any).starting_errors?.[team.id] || 0;
+
+              const rawDP = (activeContest as any).ending_doublePlays?.[team.id] !== undefined 
+                ? (activeContest as any).ending_doublePlays[team.id] 
+                : (team.stats.doublePlays || 0);
+              const rawCS = (activeContest as any).ending_caughtStealing?.[team.id] !== undefined 
+                ? (activeContest as any).ending_caughtStealing[team.id] 
+                : (team.stats.caughtStealing || 0);
+              const rawErr = (activeContest as any).ending_errors?.[team.id] !== undefined 
+                ? (activeContest as any).ending_errors[team.id] 
+                : (team.stats.errors || 0);
+
+              const dpVal = isStarted ? Math.max(0, rawDP - startDP) : 0;
+              const csVal = isStarted ? Math.max(0, rawCS - startCS) : 0;
+              const errVal = isStarted ? Math.max(0, rawErr - startErr) : 0;
+              score += dpVal + csVal - errVal;
+            } else {
+              // For total count contests (drafts), score is sum of metric values
+              const endVal = activeContest.ending_stats?.[team.id];
+              const val = endVal !== undefined ? endVal : (team.stats[activeContest.metric_key as keyof typeof team.stats] || 0);
+              const startVal = activeContest.starting_stats?.[team.id] || 0;
+              score += isStarted ? Math.max(0, val - startVal) : 0;
+            }
           }
         }
       });
@@ -1326,7 +1347,32 @@ export default function Dashboard() {
                                                     const rawValue = endVal !== undefined ? endVal : (team.stats[activeContest.metric_key as keyof typeof team.stats] || 0);
                                                     const startValue = activeContest.starting_stats?.[team.id] || 0;
                                                     const isStarted = parseDate(activeContest.start_time) <= new Date();
-                                                    const metricValue = activeContest.metric_key === 'wins' ? rawValue : (isStarted ? Math.max(0, rawValue - startValue) : 0);
+                                                    
+                                                    let metricValue = 0;
+                                                    if (activeContest.metric_key === 'wins') {
+                                                      metricValue = rawValue;
+                                                    } else if (activeContest.metric_key === 'defense') {
+                                                      const startDP = (activeContest as any).starting_doublePlays?.[team.id] || 0;
+                                                      const startCS = (activeContest as any).starting_caughtStealing?.[team.id] || 0;
+                                                      const startErr = (activeContest as any).starting_errors?.[team.id] || 0;
+
+                                                      const rawDP = (activeContest as any).ending_doublePlays?.[team.id] !== undefined 
+                                                        ? (activeContest as any).ending_doublePlays[team.id] 
+                                                        : (team.stats.doublePlays || 0);
+                                                      const rawCS = (activeContest as any).ending_caughtStealing?.[team.id] !== undefined 
+                                                        ? (activeContest as any).ending_caughtStealing[team.id] 
+                                                        : (team.stats.caughtStealing || 0);
+                                                      const rawErr = (activeContest as any).ending_errors?.[team.id] !== undefined 
+                                                        ? (activeContest as any).ending_errors[team.id] 
+                                                        : (team.stats.errors || 0);
+
+                                                      const dpVal = isStarted ? Math.max(0, rawDP - startDP) : 0;
+                                                      const csVal = isStarted ? Math.max(0, rawCS - startCS) : 0;
+                                                      const errVal = isStarted ? Math.max(0, rawErr - startErr) : 0;
+                                                      metricValue = dpVal + csVal - errVal;
+                                                    } else {
+                                                      metricValue = isStarted ? Math.max(0, rawValue - startValue) : 0;
+                                                    }
                                                     const gamesPlayed = team.stats.wins + team.stats.losses;
                                                     const projectedWins = gamesPlayed > 0 ? Math.round((rawValue / gamesPlayed) * 162) : 0;
                                                     const isTrendingCorrect = activeContest.metric_key === 'wins' ? (sel.side === 'over' ? projectedWins > team.ou_line : projectedWins < team.ou_line) : false;
@@ -1581,6 +1627,27 @@ export default function Dashboard() {
                                             {(() => {
                                               if (activeContest.metric_key === 'wins') {
                                                 return endVal !== undefined ? rawValue : `${team.stats.wins}-${team.stats.losses}`;
+                                              }
+                                              if (activeContest.metric_key === 'defense') {
+                                                const startDP = (activeContest as any).starting_doublePlays?.[team.id] || 0;
+                                                const startCS = (activeContest as any).starting_caughtStealing?.[team.id] || 0;
+                                                const startErr = (activeContest as any).starting_errors?.[team.id] || 0;
+
+                                                const rawDP = (activeContest as any).ending_doublePlays?.[team.id] !== undefined 
+                                                  ? (activeContest as any).ending_doublePlays[team.id] 
+                                                  : (team.stats.doublePlays || 0);
+                                                const rawCS = (activeContest as any).ending_caughtStealing?.[team.id] !== undefined 
+                                                  ? (activeContest as any).ending_caughtStealing[team.id] 
+                                                  : (team.stats.caughtStealing || 0);
+                                                const rawErr = (activeContest as any).ending_errors?.[team.id] !== undefined 
+                                                  ? (activeContest as any).ending_errors[team.id] 
+                                                  : (team.stats.errors || 0);
+
+                                                const isStarted = parseDate(activeContest.start_time) <= new Date();
+                                                const dpVal = isStarted ? Math.max(0, rawDP - startDP) : 0;
+                                                const csVal = isStarted ? Math.max(0, rawCS - startCS) : 0;
+                                                const errVal = isStarted ? Math.max(0, rawErr - startErr) : 0;
+                                                return dpVal + csVal - errVal;
                                               }
                                               return parseDate(activeContest.start_time) <= new Date() ? Math.max(0, rawValue - (activeContest.starting_stats?.[team.id] || 0)) : 0;
                                             })()}
