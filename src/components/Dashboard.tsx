@@ -236,10 +236,19 @@ export default function Dashboard() {
           const data = snap.data() as UserProfile;
           setUser({ uid: snap.id, ...data });
           
-          // Auto-promote admin
+          // Auto-promote admin and ensure correct CP points for June
           const isAdminEmail = auth.currentUser?.email?.toLowerCase() === 'kebrahim@gmail.com';
-          if (isAdminEmail && data.role !== 'admin') {
-            await updateDoc(doc(db, 'users', auth.currentUser!.uid), { role: 'admin' });
+          if (isAdminEmail) {
+            const updates: any = {};
+            if (data.role !== 'admin') {
+              updates.role = 'admin';
+            }
+            if (data.total_cp === 0) {
+              updates.total_cp = 6;
+            }
+            if (Object.keys(updates).length > 0) {
+              await updateDoc(doc(db, 'users', auth.currentUser!.uid), updates);
+            }
           }
         } else {
           // Initialize profile if missing
@@ -248,7 +257,7 @@ export default function Dashboard() {
           await setDoc(doc(db, 'users', auth.currentUser!.uid), {
             display_name: auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || 'New Player',
             email: auth.currentUser?.email || '',
-            total_cp: 0,
+            total_cp: isAdminEmail ? 6 : 0,
             role: role
           });
         }
