@@ -64,7 +64,7 @@ const parseDate = (date: any): Date => {
 };
 
 export default function Dashboard() {
-  const [user, setUser] = useState<UserProfile | null>(null);
+  const [userState, setUserState] = useState<UserProfile | null>(null);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [teams, setTeams] = useState<TeamLine[]>([]);
   const [contests, setContests] = useState<Contest[]>([]);
@@ -72,7 +72,134 @@ export default function Dashboard() {
   const isBigBet = activeContest?.id === 'big-bet' || activeContest?.theme_name?.toLowerCase().includes('big bet');
   const [userEntry, setUserEntry] = useState<Entry | null>(null);
   const [allEntries, setAllEntries] = useState<Entry[]>([]);
-  const [leaderboard, setLeaderboard] = useState<UserProfile[]>([]);
+  const [rawUsers, setRawUsers] = useState<UserProfile[]>([]);
+  const [allContestEntries, setAllContestEntries] = useState<Record<string, Entry[]>>({});
+
+  // Listen to entries for all loaded contests dynamically
+  useEffect(() => {
+    if (contests.length === 0) return;
+    
+    const unsubs = contests.map(contest => {
+      const entriesRef = collection(db, 'contests', contest.id, 'entries');
+      return onSnapshot(entriesRef, (snap) => {
+        setAllContestEntries(prev => ({
+          ...prev,
+          [contest.id]: snap.docs.map(d => ({ uid: d.id, ...d.data() } as Entry))
+        }));
+      }, (error) => {
+        console.error(`Error fetching entries for contest ${contest.id}:`, error);
+      });
+    });
+
+    return () => {
+      unsubs.forEach(unsub => unsub());
+    };
+  }, [contests]);
+
+  // Compute dynamic leaderboard
+  const leaderboard = useMemo(() => {
+    if (rawUsers.length === 0) return [];
+
+    // Initialize map of user ID -> dynamic total_cp
+    const userCPMap: Record<string, number> = {};
+    rawUsers.forEach(u => {
+      userCPMap[u.uid] = 0;
+    });
+
+    // Award points standard: Rank 1 gets 9, Rank 2 gets 6, Rank 3 gets 3
+    const rewardPointsMap: Record<number, number> = { 0: 9, 1: 6, 2: 3 };
+
+    // Loop over each contest and check if points are awarded
+    contests.forEach(contest => {
+      if (!contest.points_awarded) return;
+
+      const entries = allContestEntries[contest.id] || [];
+      if (entries.length === 0) return;
+
+      // Score each entry
+      const scored = entries.map(entry => {
+        let score = 0;
+        const now = new Date();
+        const isStarted = parseDate(contest.start_time) <= now;
+
+        entry.selections.forEach(sel => {
+          const team = teams.find(t => t.id === sel.team_id);
+          if (team) {
+            if (contest.metric_key === 'wins') {
+              const endVal = contest.ending_stats?.[team.id];
+              const wins = endVal !== undefined ? endVal : team.stats.wins;
+              
+              const gamesRemaining = 162 - (team.stats.wins + team.stats.losses);
+              const isClinched = sel.side === 'over' 
+                ? wins > team.ou_line 
+                : (wins + gamesRemaining) < team.ou_line;
+              if (isClinched) {
+                score += (contest.use_chips ? (sel.chips || 0) : 1);
+              }
+            } else {
+              if (contest.metric_key === 'defense') {
+                const startDP = (contest as any).starting_doublePlays?.[team.id] || 0;
+                const startCS = (contest as any).starting_caughtStealing?.[team.id] || 0;
+                const startErr = (contest as any).starting_errors?.[team.id] || 0;
+
+                const rawDP = (contest as any).ending_doublePlays?.[team.id] !== undefined 
+                  ? (contest as any).ending_doublePlays[team.id] 
+                  : (team.stats.doublePlays || 0);
+                const rawCS = (contest as any).ending_caughtStealing?.[team.id] !== undefined 
+                  ? (contest as any).ending_caughtStealing[team.id] 
+                  : (team.stats.caughtStealing || 0);
+                const rawErr = (contest as any).ending_errors?.[team.id] !== undefined 
+                  ? (contest as any).ending_errors[team.id] 
+                  : (team.stats.errors || 0);
+
+                const dpVal = isStarted ? Math.max(0, rawDP - startDP) : 0;
+                const csVal = isStarted ? Math.max(0, rawCS - startCS) : 0;
+                const errVal = isStarted ? Math.max(0, rawErr - startErr) : 0;
+                score += dpVal + csVal - errVal;
+              } else {
+                const endVal = contest.ending_stats?.[team.id];
+                const val = endVal !== undefined ? endVal : (team.stats[contest.metric_key as keyof typeof team.stats] || 0);
+                const startVal = contest.starting_stats?.[team.id] || 0;
+                score += isStarted ? Math.max(0, val - startVal) : 0;
+              }
+            }
+          }
+        });
+        return { uid: entry.uid, score };
+      }).sort((a, b) => b.score - a.score);
+
+      // Rank entries with ties
+      let currentRank = 0;
+      const ranked = scored.map((entry, index) => {
+        if (index > 0 && entry.score < scored[index - 1].score) {
+          currentRank = index;
+        }
+        return { ...entry, rank: currentRank };
+      });
+
+      // Distribute points to users
+      ranked.forEach(r => {
+        const points = rewardPointsMap[r.rank] || 0;
+        if (points > 0 && userCPMap[r.uid] !== undefined) {
+          userCPMap[r.uid] += points;
+        }
+      });
+    });
+
+    // Create leaderboard from users and sort by dynamically calculated CP
+    return rawUsers.map(u => ({
+      ...u,
+      total_cp: userCPMap[u.uid] !== undefined ? userCPMap[u.uid] : 0
+    })).sort((a, b) => b.total_cp - a.total_cp);
+  }, [rawUsers, contests, allContestEntries, teams]);
+
+  // Derive user with dynamically calculated CP
+  const user = useMemo(() => {
+    if (!userState) return null;
+    const matched = leaderboard.find(p => p.uid === userState.uid);
+    return matched ? { ...userState, total_cp: matched.total_cp } : userState;
+  }, [userState, leaderboard]);
+
   const [view, setView] = useState<'dashboard' | 'drafting' | 'admin' | 'standings'>('dashboard');
   const [dashboardView, setDashboardView] = useState<'overview' | 'detail'>('overview');
   const [detailTab, setDetailTab] = useState<'my_slip' | 'standings'>('standings');
@@ -234,17 +361,14 @@ export default function Dashboard() {
       try {
         if (snap.exists()) {
           const data = snap.data() as UserProfile;
-          setUser({ uid: snap.id, ...data });
+          setUserState({ uid: snap.id, ...data });
           
-          // Auto-promote admin and ensure correct CP points for June
+          // Auto-promote admin
           const isAdminEmail = auth.currentUser?.email?.toLowerCase() === 'kebrahim@gmail.com';
           if (isAdminEmail) {
             const updates: any = {};
             if (data.role !== 'admin') {
               updates.role = 'admin';
-            }
-            if (data.total_cp === 0) {
-              updates.total_cp = 6;
             }
             if (Object.keys(updates).length > 0) {
               await updateDoc(doc(db, 'users', auth.currentUser!.uid), updates);
@@ -257,7 +381,7 @@ export default function Dashboard() {
           await setDoc(doc(db, 'users', auth.currentUser!.uid), {
             display_name: auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || 'New Player',
             email: auth.currentUser?.email || '',
-            total_cp: isAdminEmail ? 6 : 0,
+            total_cp: 0,
             role: role
           });
         }
@@ -302,9 +426,9 @@ export default function Dashboard() {
       setContestsLoaded(true);
     });
 
-    // Leaderboard
+    // Leaderboard (raw users)
     const unsubLeaderboard = onSnapshot(collection(db, 'users'), (snap) => {
-      setLeaderboard(snap.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile)).sort((a, b) => b.total_cp - a.total_cp));
+      setRawUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile)));
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'users');
     });
