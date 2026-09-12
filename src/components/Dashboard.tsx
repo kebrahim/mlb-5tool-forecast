@@ -69,7 +69,7 @@ export default function Dashboard() {
   const [teams, setTeams] = useState<TeamLine[]>([]);
   const [contests, setContests] = useState<Contest[]>([]);
   const [activeContest, setActiveContest] = useState<Contest | null>(null);
-  const isBigBet = activeContest?.id === 'big-bet' || activeContest?.theme_name?.toLowerCase().includes('big bet');
+  const isBigBet = activeContest?.id === 'big-bet' || activeContest?.id === 'season_2026' || activeContest?.theme_name?.toLowerCase().includes('big bet') || (activeContest?.metric_key === 'wins' && activeContest?.use_chips);
   const [userEntry, setUserEntry] = useState<Entry | null>(null);
   const [allEntries, setAllEntries] = useState<Entry[]>([]);
   const [rawUsers, setRawUsers] = useState<UserProfile[]>([]);
@@ -111,10 +111,36 @@ export default function Dashboard() {
 
     // Loop over each contest and check if points are awarded
     contests.forEach(contest => {
-      if (!contest.points_awarded) return;
-
+      const isSeasonBigBet = contest.id === 'season_2026' || contest.id === 'big-bet' || contest.theme_name?.toLowerCase().includes('big bet') || (contest.metric_key === 'wins' && contest.use_chips);
       const entries = allContestEntries[contest.id] || [];
       if (entries.length === 0) return;
+
+      if (isSeasonBigBet) {
+        // For Big Bet, each selection that has already clinched/been successful awards its chips as Championship Points (CPs)
+        entries.forEach(entry => {
+          let clinchedCP = 0;
+          entry.selections.forEach(sel => {
+            const team = teams.find(t => t.id === sel.team_id);
+            if (team) {
+              const endVal = contest.ending_stats?.[team.id];
+              const wins = endVal !== undefined ? endVal : team.stats.wins;
+              const gamesRemaining = (contest.results_sealed || endVal !== undefined) ? 0 : (162 - (team.stats.wins + team.stats.losses));
+              const isClinched = sel.side === 'over' 
+                ? wins > team.ou_line 
+                : (wins + gamesRemaining) < team.ou_line;
+              if (isClinched) {
+                clinchedCP += (contest.use_chips ? (sel.chips || 0) : 1);
+              }
+            }
+          });
+          if (clinchedCP > 0 && userCPMap[entry.uid] !== undefined) {
+            userCPMap[entry.uid] += clinchedCP;
+          }
+        });
+        return;
+      }
+
+      if (!contest.points_awarded) return;
 
       // Score each entry
       const scored = entries.map(entry => {
@@ -199,6 +225,23 @@ export default function Dashboard() {
     const matched = leaderboard.find(p => p.uid === userState.uid);
     return matched ? { ...userState, total_cp: matched.total_cp } : userState;
   }, [userState, leaderboard]);
+
+  // When admin is active, sync any dynamic leaderboard total_cp to Firestore users collection
+  useEffect(() => {
+    const isAdmin = user?.role === 'admin' || currentUserEmail?.toLowerCase() === 'kebrahim@gmail.com';
+    if (!isAdmin || leaderboard.length === 0) return;
+
+    leaderboard.forEach(player => {
+      const raw = rawUsers.find(u => u.uid === player.uid);
+      if (raw && raw.total_cp !== player.total_cp) {
+        updateDoc(doc(db, 'users', player.uid), {
+          total_cp: player.total_cp
+        }).catch(err => {
+          console.warn('Syncing player total_cp to Firestore:', err);
+        });
+      }
+    });
+  }, [leaderboard, rawUsers, user, currentUserEmail]);
 
   const [view, setView] = useState<'dashboard' | 'drafting' | 'admin' | 'standings'>('dashboard');
   const [dashboardView, setDashboardView] = useState<'overview' | 'detail'>('overview');
@@ -1166,8 +1209,8 @@ export default function Dashboard() {
                                     <div className="text-xs font-varsity text-blue-600 uppercase">{formatMetric(activeContest.metric_key)}</div>
                                   </div>
                                   <div>
-                                    <div className="text-[8px] font-varsity text-slate-500 uppercase tracking-widest mb-1">Limit</div>
-                                    <div className="text-xs font-varsity text-slate-900">{activeContest.selection_limit} Teams</div>
+                                    <div className="text-[8px] font-varsity text-slate-500 uppercase tracking-widest mb-1">{isBigBet ? 'CP Scoring' : 'Limit'}</div>
+                                    <div className="text-xs font-varsity text-slate-900">{isBigBet ? '1 Clinched Chip = 1 CP' : `${activeContest.selection_limit} Teams`}</div>
                                   </div>
                                   <div>
                                     <div className="text-[8px] font-varsity text-slate-500 uppercase tracking-widest mb-1">Starts</div>
@@ -1219,6 +1262,64 @@ export default function Dashboard() {
                                     
                                     {userEntry ? (
                                       <div className="space-y-4">
+                                        {isBigBet && (() => {
+                                          const userClinchedCP = userEntry.selections.reduce((sum, sel) => {
+                                            const team = teams.find(t => t.id === sel.team_id);
+                                            if (!team) return sum;
+                                            const endVal = activeContest.ending_stats?.[team.id];
+                                            const wins = endVal !== undefined ? endVal : team.stats.wins;
+                                            const gamesRemaining = (activeContest.results_sealed || endVal !== undefined) ? 0 : (162 - (team.stats.wins + team.stats.losses));
+                                            const isClinched = sel.side === 'over' ? wins > team.ou_line : (wins + gamesRemaining) < team.ou_line;
+                                            return isClinched ? sum + (sel.chips || 0) : sum;
+                                          }, 0);
+                                          const userClinchedCount = userEntry.selections.filter(sel => {
+                                            const team = teams.find(t => t.id === sel.team_id);
+                                            if (!team) return false;
+                                            const endVal = activeContest.ending_stats?.[team.id];
+                                            const wins = endVal !== undefined ? endVal : team.stats.wins;
+                                            const gamesRemaining = (activeContest.results_sealed || endVal !== undefined) ? 0 : (162 - (team.stats.wins + team.stats.losses));
+                                            return sel.side === 'over' ? wins > team.ou_line : (wins + gamesRemaining) < team.ou_line;
+                                          }).length;
+                                          const userPendingChips = userEntry.selections.reduce((sum, sel) => {
+                                            const team = teams.find(t => t.id === sel.team_id);
+                                            if (!team) return sum;
+                                            const endVal = activeContest.ending_stats?.[team.id];
+                                            const wins = endVal !== undefined ? endVal : team.stats.wins;
+                                            const gamesRemaining = (activeContest.results_sealed || endVal !== undefined) ? 0 : (162 - (team.stats.wins + team.stats.losses));
+                                            const isClinched = sel.side === 'over' ? wins > team.ou_line : (wins + gamesRemaining) < team.ou_line;
+                                            const isEliminated = sel.side === 'over' ? (wins + gamesRemaining) < team.ou_line : wins > team.ou_line;
+                                            return (!isClinched && !isEliminated) ? sum + (sel.chips || 0) : sum;
+                                          }, 0);
+
+                                          return (
+                                            <div className="bg-gradient-to-r from-amber-500/15 via-amber-500/5 to-transparent border-2 border-amber-300 rounded-2xl p-5 mb-4 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+                                              <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 rounded-xl bg-amber-500 text-amber-950 flex items-center justify-center font-varsity shadow-md">
+                                                  <Trophy size={24} />
+                                                </div>
+                                                <div>
+                                                  <div className="text-[10px] font-varsity text-amber-900 uppercase tracking-widest font-black flex items-center gap-1.5">
+                                                    <span>Big Bet Champ Points Status</span>
+                                                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                                  </div>
+                                                  <div className="text-2xl md:text-3xl font-varsity text-slate-900 uppercase tracking-tight">
+                                                    {userClinchedCP} <span className="text-amber-600">CP Awarded</span>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                              <div className="flex items-center gap-3 text-xs font-varsity uppercase tracking-wider">
+                                                <div className="px-3 py-2 bg-white/90 rounded-xl border border-slate-200 text-right shadow-xs">
+                                                  <div className="text-slate-400 text-[9px]">Picks Clinched</div>
+                                                  <div className="text-emerald-600 font-black text-sm">{userClinchedCount} of 5</div>
+                                                </div>
+                                                <div className="px-3 py-2 bg-white/90 rounded-xl border border-slate-200 text-right shadow-xs">
+                                                  <div className="text-slate-400 text-[9px]">Chips In Play</div>
+                                                  <div className="text-blue-600 font-black text-sm">{userPendingChips} Chips</div>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          );
+                                        })()}
                                         {[...userEntry.selections].sort((a, b) => b.chips - a.chips).map(sel => {
                                           const team = teams.find(t => t.id === sel.team_id);
                                           if (!team) return null;
@@ -1328,14 +1429,34 @@ export default function Dashboard() {
                                           const isTrendingCorrect = sel.side === 'over' ? projectedWins > team.ou_line : projectedWins < team.ou_line;
 
                                           return (
-                                            <div key={sel.team_id} className="bg-scorebook p-6 rounded-2xl border-2 border-slate-200 shadow-md group hover:border-[var(--color-stitch-red)] transition-all">
+                                            <div key={sel.team_id} className={`p-6 rounded-2xl border-2 shadow-md transition-all ${
+                                              isBigBet && isClinched 
+                                                ? 'bg-emerald-50/50 border-emerald-400 shadow-emerald-900/5' 
+                                                : isBigBet && isEliminated 
+                                                  ? 'bg-rose-50/20 border-slate-200 opacity-75' 
+                                                  : 'bg-scorebook border-slate-200 hover:border-[var(--color-stitch-red)]'
+                                            }`}>
                                               <div className="flex justify-between items-center mb-4">
                                                 <div>
                                                   <h3 className="font-varsity text-lg text-slate-900 uppercase tracking-tight">{team.team_name}</h3>
                                                   <div className="text-[10px] text-slate-500 uppercase tracking-widest font-varsity flex flex-wrap items-center gap-y-1">
                                                     <span>{sel.side} {team.ou_line} • {sel.chips} Chips</span>
-                                                    {isClinched && <span className="text-emerald-600 ml-2 font-black">CLINCHED</span>}
-                                                    {isEliminated && <span className="text-rose-600 ml-2 font-black">ELIMINATED</span>}
+                                                    {isClinched && (
+                                                      <span className="ml-2 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-black text-[9px] border border-emerald-300 flex items-center gap-1 shadow-xs">
+                                                        <Trophy size={10} className="text-emerald-700" />
+                                                        CLINCHED • +{sel.chips} CP AWARDED
+                                                      </span>
+                                                    )}
+                                                    {isEliminated && (
+                                                      <span className="ml-2 px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 font-black text-[9px] border border-rose-200">
+                                                        ELIMINATED • 0 CP
+                                                      </span>
+                                                    )}
+                                                    {!isClinched && !isEliminated && (
+                                                      <span className="ml-2 px-2 py-0.5 rounded-full bg-blue-50 text-blue-800 font-bold text-[9px] border border-blue-200">
+                                                        {sel.chips} CHIPS AT STAKE
+                                                      </span>
+                                                    )}
                                                     {!isClinched && !isEliminated && endVal === undefined && wins + team.stats.losses > 0 && (
                                                       <span className={`ml-2 px-1.5 py-0.5 rounded ${isTrendingCorrect ? 'bg-emerald-500/10 text-emerald-600' : 'bg-rose-500/10 text-rose-600'} font-black text-[8px]`}>
                                                         ON PACE: {projectedWins} ({projectedWins > team.ou_line ? 'O' : 'U'})
@@ -1344,10 +1465,33 @@ export default function Dashboard() {
                                                   </div>
                                                 </div>
                                                 <div className="text-right">
-                                                  <div className={`text-2xl font-varsity tabular-nums tracking-tighter ${isClinched ? 'text-emerald-600' : isEliminated ? 'text-rose-600' : 'text-slate-400'}`}>
-                                                    {wins}{endVal === undefined && ` - ${team.stats.losses}`}
-                                                  </div>
-                                                  <div className="text-[10px] text-slate-500 uppercase tracking-widest font-varsity">{endVal !== undefined ? 'Final Result' : 'Current Record'}</div>
+                                                  {isBigBet && isClinched ? (
+                                                    <div>
+                                                      <div className="text-2xl md:text-3xl font-varsity text-emerald-600 tabular-nums tracking-tighter flex items-center justify-end gap-1">
+                                                        <Trophy size={18} className="text-emerald-500" />
+                                                        +{sel.chips} CP
+                                                      </div>
+                                                      <div className="text-[10px] text-emerald-700 uppercase tracking-widest font-varsity font-black">
+                                                        AWARDED ({wins}{endVal === undefined && ` - ${team.stats.losses}`})
+                                                      </div>
+                                                    </div>
+                                                  ) : isBigBet && isEliminated ? (
+                                                    <div>
+                                                      <div className="text-2xl font-varsity text-rose-600 tabular-nums tracking-tighter">
+                                                        0 CP
+                                                      </div>
+                                                      <div className="text-[10px] text-rose-500 uppercase tracking-widest font-varsity font-bold">
+                                                        Eliminated ({wins}{endVal === undefined && ` - ${team.stats.losses}`})
+                                                      </div>
+                                                    </div>
+                                                  ) : (
+                                                    <div>
+                                                      <div className={`text-2xl font-varsity tabular-nums tracking-tighter ${isClinched ? 'text-emerald-600' : isEliminated ? 'text-rose-600' : 'text-slate-400'}`}>
+                                                        {wins}{endVal === undefined && ` - ${team.stats.losses}`}
+                                                      </div>
+                                                      <div className="text-[10px] text-slate-500 uppercase tracking-widest font-varsity">{endVal !== undefined ? 'Final Result' : 'Current Record'}</div>
+                                                    </div>
+                                                  )}
                                                 </div>
                                               </div>
                                               <div className="relative h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
@@ -1459,10 +1603,16 @@ export default function Dashboard() {
                                                     {entry.score}
                                                   </div>
                                                 )}
-                                                {cp > 0 && activeContest.points_awarded && getContestStatus(activeContest).statusType === 'completed' && (
-                                                  <div className="px-2 py-0.5 bg-amber-500 text-amber-950 text-[8px] font-black rounded-lg">
-                                                    +{cp} CP
+                                                {isBigBet ? (
+                                                  <div className="px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-300 text-[9px] font-black rounded-lg">
+                                                    +{entry.score} CP
                                                   </div>
+                                                ) : (
+                                                  cp > 0 && activeContest.points_awarded && getContestStatus(activeContest).statusType === 'completed' && (
+                                                    <div className="px-2 py-0.5 bg-amber-500 text-amber-950 text-[8px] font-black rounded-lg">
+                                                      +{cp} CP
+                                                    </div>
+                                                  )
                                                 )}
                                               </div>
                                             </div>
@@ -1567,7 +1717,17 @@ export default function Dashboard() {
                                             )}
 
                                             <div className={`hidden md:flex ${isBigBet ? 'col-span-3' : 'col-span-2'} flex-col items-end`}>
-                                              {cp > 0 && activeContest.points_awarded && getContestStatus(activeContest).statusType === 'completed' ? (
+                                              {isBigBet ? (
+                                                <>
+                                                  <div className="text-2xl font-varsity text-emerald-600 tabular-nums tracking-tighter">
+                                                    +{entry.score}
+                                                  </div>
+                                                  <div className="flex items-center gap-1">
+                                                    <Trophy size={10} className="text-emerald-500" />
+                                                    <span className="text-[10px] font-varsity text-emerald-600 uppercase tracking-widest font-black">CP Awarded</span>
+                                                  </div>
+                                                </>
+                                              ) : cp > 0 && activeContest.points_awarded && getContestStatus(activeContest).statusType === 'completed' ? (
                                                 <>
                                                   <div className="text-2xl font-varsity text-amber-600 tabular-nums tracking-tighter">
                                                     +{cp}
@@ -1804,7 +1964,17 @@ export default function Dashboard() {
                               )}
 
                               <div className={`hidden md:flex ${isBigBet ? 'col-span-3' : 'col-span-2'} flex-col items-end`}>
-                                {cp > 0 && getContestStatus(activeContest).statusType === 'completed' ? (
+                                {isBigBet ? (
+                                  <>
+                                    <div className="text-2xl font-varsity text-emerald-600 tabular-nums tracking-tighter">
+                                      +{entry.score}
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <Trophy size={10} className="text-emerald-500" />
+                                      <span className="text-[10px] font-varsity text-emerald-600 uppercase tracking-widest font-black">CP Awarded</span>
+                                    </div>
+                                  </>
+                                ) : cp > 0 && getContestStatus(activeContest).statusType === 'completed' ? (
                                   <>
                                     <div className="text-2xl font-varsity text-amber-600 tabular-nums tracking-tighter">
                                       +{cp}
@@ -1993,14 +2163,24 @@ export default function Dashboard() {
                       : wins > team.ou_line;
 
                     return (
-                      <div key={sel.team_id} className="bg-slate-50 p-4 rounded-xl border-2 border-slate-100 shadow-sm transition-all">
+                      <div key={sel.team_id} className={`p-4 rounded-xl border-2 shadow-sm transition-all ${
+                        isBigBet && isClinched 
+                          ? 'bg-emerald-50/50 border-emerald-300' 
+                          : isBigBet && isEliminated 
+                            ? 'bg-rose-50/20 border-slate-200 opacity-75' 
+                            : 'bg-slate-50 border-slate-100'
+                      }`}>
                         <div className="flex justify-between items-center mb-3">
                           <div>
                             <div className="font-varsity text-slate-900 uppercase tracking-tight">{team.team_name}</div>
                             <div className="text-[10px] text-slate-500 uppercase tracking-widest font-varsity flex flex-wrap items-center gap-y-1">
                               <span>{sel.side} {team.ou_line} • {sel.chips} Chips</span>
-                              {isClinched && <span className="text-emerald-600 ml-2 font-black">CLINCHED</span>}
-                              {isEliminated && <span className="text-rose-600 ml-2 font-black">ELIMINATED</span>}
+                              {isClinched && (
+                                <span className="text-emerald-700 ml-2 font-black">
+                                  CLINCHED • +{sel.chips} CP AWARDED
+                                </span>
+                              )}
+                              {isEliminated && <span className="text-rose-600 ml-2 font-black">ELIMINATED • 0 CP</span>}
                               {!isClinched && !isEliminated && endVal === undefined && gamesPlayed > 0 && (
                                 <span className={`ml-2 px-1.5 py-0.5 rounded ${isTrendingCorrect ? 'bg-emerald-500/10 text-emerald-600' : 'bg-rose-500/10 text-rose-600'} font-black text-[7px]`}>
                                   PACE: {projectedWins} ({projectedWins > team.ou_line ? 'O' : 'U'})
@@ -2009,10 +2189,21 @@ export default function Dashboard() {
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className={`font-varsity uppercase tracking-tight tabular-nums ${isClinched ? 'text-emerald-600' : isEliminated ? 'text-rose-600' : 'text-slate-400'}`}>
-                              {wins}{endVal === undefined && ` - ${team.stats.losses}`}
-                            </div>
-                            <div className="text-[8px] text-slate-500 uppercase tracking-widest font-varsity">{endVal !== undefined ? 'Final' : 'Current'}</div>
+                            {isBigBet && isClinched ? (
+                              <div>
+                                <div className="font-varsity uppercase tracking-tight tabular-nums text-emerald-600 font-black text-lg">
+                                  +{sel.chips} CP
+                                </div>
+                                <div className="text-[8px] text-emerald-700 uppercase tracking-widest font-varsity font-black">AWARDED</div>
+                              </div>
+                            ) : (
+                              <div>
+                                <div className={`font-varsity uppercase tracking-tight tabular-nums ${isClinched ? 'text-emerald-600' : isEliminated ? 'text-rose-600' : 'text-slate-400'}`}>
+                                  {wins}{endVal === undefined && ` - ${team.stats.losses}`}
+                                </div>
+                                <div className="text-[8px] text-slate-500 uppercase tracking-widest font-varsity">{endVal !== undefined ? 'Final' : 'Current'}</div>
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="relative h-1.5 bg-slate-200 rounded-full overflow-hidden">
