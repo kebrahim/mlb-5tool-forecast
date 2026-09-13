@@ -63,6 +63,63 @@ const parseDate = (date: any): Date => {
   return new Date();
 };
 
+export interface NeededRecordInfo {
+  side: 'over' | 'under';
+  targetWins: number;
+  remainingGames: number;
+  neededWinsRecord: number;
+  neededLossesRecord: number;
+  recordStr: string;
+  conditionText: string;
+  summaryText: string;
+}
+
+export function calculateNeededRecord(
+  side: 'over' | 'under',
+  ouLine: number,
+  currentWins: number,
+  currentLosses: number,
+  totalSeasonGames = 162
+): NeededRecordInfo | null {
+  const gamesPlayed = currentWins + currentLosses;
+  const remainingGames = Math.max(0, totalSeasonGames - gamesPlayed);
+  if (remainingGames <= 0) return null;
+
+  if (side === 'over') {
+    const minWinsToHitOver = Math.floor(ouLine) + 1;
+    const winsNeeded = minWinsToHitOver - currentWins;
+    if (winsNeeded <= 0) return null; // Already clinched
+    if (winsNeeded > remainingGames) return null; // Eliminated
+    const maxLossesAllowed = remainingGames - winsNeeded;
+    return {
+      side: 'over',
+      targetWins: minWinsToHitOver,
+      remainingGames,
+      neededWinsRecord: winsNeeded,
+      neededLossesRecord: maxLossesAllowed,
+      recordStr: `${winsNeeded}-${maxLossesAllowed}`,
+      conditionText: `at least ${winsNeeded}-${maxLossesAllowed}`,
+      summaryText: `Needs to go at least ${winsNeeded}-${maxLossesAllowed} in remaining ${remainingGames} ${remainingGames === 1 ? 'game' : 'games'} to win bet`
+    };
+  } else {
+    const maxWinsToStayUnder = Math.ceil(ouLine) - 1;
+    const maxWinsAllowed = maxWinsToStayUnder - currentWins;
+    if (maxWinsAllowed < 0) return null; // Eliminated
+    if (maxWinsAllowed >= remainingGames) return null; // Already clinched
+    const minLossesNeeded = remainingGames - maxWinsAllowed;
+    return {
+      side: 'under',
+      targetWins: maxWinsToStayUnder,
+      remainingGames,
+      neededWinsRecord: maxWinsAllowed,
+      neededLossesRecord: minLossesNeeded,
+      recordStr: `${maxWinsAllowed}-${minLossesNeeded}`,
+      conditionText: `at most ${maxWinsAllowed}-${minLossesNeeded}`,
+      summaryText: `Needs to go at most ${maxWinsAllowed}-${minLossesNeeded} in remaining ${remainingGames} ${remainingGames === 1 ? 'game' : 'games'} to win bet`
+    };
+  }
+}
+
 export default function Dashboard() {
   const [userState, setUserState] = useState<UserProfile | null>(null);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
@@ -1425,6 +1482,9 @@ export default function Dashboard() {
                                           const isEliminated = sel.side === 'over'
                                             ? (wins + gamesRemaining) < team.ou_line
                                             : wins > team.ou_line;
+                                          const neededRecord = (!isClinched && !isEliminated && gamesRemaining > 0)
+                                            ? calculateNeededRecord(sel.side, team.ou_line, wins, team.stats.losses)
+                                            : null;
                                           
                                           const isTrendingCorrect = sel.side === 'over' ? projectedWins > team.ou_line : projectedWins < team.ou_line;
 
@@ -1504,6 +1564,43 @@ export default function Dashboard() {
                                                   style={{ left: '50%' }}
                                                 />
                                               </div>
+
+                                              {/* Required Record to Win Bet */}
+                                              {neededRecord && (
+                                                <div className="mt-3 px-3 py-2 rounded-xl bg-blue-50 border border-blue-200 flex flex-wrap items-center justify-between gap-2 text-xs font-varsity">
+                                                  <div className="flex items-center gap-2 text-slate-800">
+                                                    <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0 animate-pulse" />
+                                                    <span>
+                                                      Needs to go <span className="font-mono text-blue-700 font-black bg-white px-2 py-0.5 rounded border border-blue-300 shadow-2xs">{neededRecord.conditionText}</span> in remaining {neededRecord.remainingGames} {neededRecord.remainingGames === 1 ? 'game' : 'games'} to win bet
+                                                    </span>
+                                                  </div>
+                                                  <span className="text-[10px] text-blue-700 uppercase tracking-wider font-mono font-bold bg-blue-100/70 px-2 py-0.5 rounded">
+                                                    Target: {sel.side === 'over' ? `≥${neededRecord.targetWins} Wins` : `≤${neededRecord.targetWins} Wins`}
+                                                  </span>
+                                                </div>
+                                              )}
+                                              {isBigBet && isClinched && (
+                                                <div className="mt-3 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-300 flex flex-wrap items-center justify-between gap-2 text-xs font-varsity text-emerald-900">
+                                                  <div className="flex items-center gap-1.5 font-bold">
+                                                    <Trophy size={14} className="text-emerald-600 shrink-0" />
+                                                    <span>Bet Clinched! Successfully hit {sel.side.toUpperCase()} {team.ou_line}</span>
+                                                  </div>
+                                                  <span className="text-[10px] font-mono font-black text-emerald-800 uppercase tracking-wider bg-emerald-100/80 px-2 py-0.5 rounded border border-emerald-300">
+                                                    +{sel.chips} CP Awarded
+                                                  </span>
+                                                </div>
+                                              )}
+                                              {isBigBet && isEliminated && (
+                                                <div className="mt-3 px-3 py-2 rounded-xl bg-rose-50 border border-rose-200 flex flex-wrap items-center justify-between gap-2 text-xs font-varsity text-rose-900">
+                                                  <div className="flex items-center gap-1.5 font-bold">
+                                                    <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+                                                    <span>Eliminated — Cannot reach {sel.side.toUpperCase()} {team.ou_line} in remaining games</span>
+                                                  </div>
+                                                  <span className="text-[10px] font-mono font-bold text-rose-600 uppercase tracking-wider bg-rose-100/60 px-2 py-0.5 rounded">
+                                                    0 CP
+                                                  </span>
+                                                </div>
+                                              )}
                                             </div>
                                           );
                                         })}
@@ -1667,10 +1764,14 @@ export default function Dashboard() {
                                                     const isEliminated = activeContest.metric_key === 'wins'
                                                       ? (sel.side === 'over' ? (rawValue + gamesRemaining) < team.ou_line : rawValue > team.ou_line)
                                                       : false;
+                                                    const neededRecord = activeContest.metric_key === 'wins' && !isClinched && !isEliminated && gamesRemaining > 0
+                                                      ? calculateNeededRecord(sel.side, team.ou_line, rawValue, team.stats.losses)
+                                                      : null;
 
                                                     return (
                                                       <div 
                                                         key={sel.team_id}
+                                                        title={neededRecord ? `${team.team_name}: ${neededRecord.summaryText}` : isClinched ? `${team.team_name}: Clinched!` : isEliminated ? `${team.team_name}: Eliminated` : undefined}
                                                         className={`px-2 py-0.5 rounded-md border flex items-center gap-1 transition-all ${
                                                           isBigBet ? 'text-[10px] md:text-xs' : 'text-xs md:text-sm px-3 py-1.5'
                                                         } ${
@@ -1888,10 +1989,14 @@ export default function Dashboard() {
                                       const isEliminated = activeContest.metric_key === 'wins'
                                         ? (sel.side === 'over' ? (rawValue + gamesRemaining) < team.ou_line : rawValue > team.ou_line)
                                         : false;
+                                      const neededRecord = activeContest.metric_key === 'wins' && !isClinched && !isEliminated && gamesRemaining > 0
+                                        ? calculateNeededRecord(sel.side, team.ou_line, rawValue, team.stats.losses)
+                                        : null;
 
                                       return (
                                           <div 
                                             key={sel.team_id} 
+                                            title={neededRecord ? `${team.team_name}: ${neededRecord.summaryText}` : isClinched ? `${team.team_name}: Clinched!` : isEliminated ? `${team.team_name}: Eliminated` : undefined}
                                             className={`px-2 py-0.5 rounded-md border flex items-center gap-1 transition-all ${
                                               isBigBet ? 'text-[10px] md:text-xs' : 'text-xs md:text-sm px-3 py-1.5'
                                             } ${
@@ -2161,6 +2266,9 @@ export default function Dashboard() {
                     const isEliminated = sel.side === 'over'
                       ? (wins + gamesRemaining) < team.ou_line
                       : wins > team.ou_line;
+                    const neededRecord = (!isClinched && !isEliminated && gamesRemaining > 0)
+                      ? calculateNeededRecord(sel.side, team.ou_line, wins, team.stats.losses)
+                      : null;
 
                     return (
                       <div key={sel.team_id} className={`p-4 rounded-xl border-2 shadow-sm transition-all ${
@@ -2212,6 +2320,43 @@ export default function Dashboard() {
                             style={{ width: `${Math.min((wins / team.ou_line) * 100, 100)}%` }}
                           />
                         </div>
+
+                        {/* Required record to win bet */}
+                        {neededRecord && (
+                          <div className="mt-2.5 px-3 py-2 rounded-lg bg-blue-50/90 border border-blue-200 flex flex-wrap items-center justify-between gap-1.5 text-xs font-varsity">
+                            <div className="flex items-center gap-1.5 text-slate-800">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0 animate-pulse" />
+                              <span>
+                                Needs to go <span className="font-mono text-blue-700 font-black bg-white px-1.5 py-0.5 rounded border border-blue-300 shadow-2xs">{neededRecord.conditionText}</span> in remaining {neededRecord.remainingGames} {neededRecord.remainingGames === 1 ? 'game' : 'games'} to win bet
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-blue-700 uppercase tracking-wider font-mono font-bold bg-blue-100/70 px-1.5 py-0.5 rounded">
+                              Target: {sel.side === 'over' ? `≥${neededRecord.targetWins} wins` : `≤${neededRecord.targetWins} wins`}
+                            </span>
+                          </div>
+                        )}
+                        {isBigBet && isClinched && (
+                          <div className="mt-2.5 px-3 py-1.5 rounded-lg bg-emerald-100/70 border border-emerald-300 flex items-center justify-between gap-1.5 text-xs font-varsity text-emerald-900">
+                            <div className="flex items-center gap-1.5 font-bold">
+                              <Trophy size={12} className="text-emerald-700 shrink-0" />
+                              <span>Bet Clinched! Hit {sel.side.toUpperCase()} {team.ou_line}</span>
+                            </div>
+                            <span className="text-[10px] font-mono font-black text-emerald-800 uppercase tracking-wider bg-emerald-200/80 px-1.5 py-0.5 rounded">
+                              +{sel.chips} CP Awarded
+                            </span>
+                          </div>
+                        )}
+                        {isBigBet && isEliminated && (
+                          <div className="mt-2.5 px-3 py-1.5 rounded-lg bg-rose-50 border border-rose-200 flex items-center justify-between gap-1.5 text-xs font-varsity text-rose-800">
+                            <div className="flex items-center gap-1.5 font-bold">
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                              <span>Eliminated — Cannot reach {sel.side.toUpperCase()} {team.ou_line}</span>
+                            </div>
+                            <span className="text-[10px] font-mono font-bold text-rose-600 uppercase tracking-wider bg-rose-100/60 px-1.5 py-0.5 rounded">
+                              0 CP
+                            </span>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
