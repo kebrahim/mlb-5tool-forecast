@@ -120,13 +120,63 @@ export function calculateNeededRecord(
   }
 }
 
+export interface ContestCPDetail {
+  cp: number;
+  score: number;
+  rank?: number;
+  status: 'completed' | 'active' | 'upcoming';
+  isAwarded: boolean;
+  hasEntry: boolean;
+}
+
+export interface BigBetDetail {
+  cp: number;
+  clinchedCount: number;
+  totalPicks: number;
+  hasEntry: boolean;
+}
+
+export interface LeaderboardPlayer extends UserProfile {
+  total_cp: number;
+  monthlyCPTotal: number;
+  bigBetCP: number;
+  bigBetDetail: BigBetDetail;
+  contestBreakdown: Record<string, ContestCPDetail>;
+}
+
+export const isSeasonBigBetContest = (c?: Contest | null) => {
+  if (!c) return false;
+  return c.id === 'season_2026' || c.id === 'big-bet' || c.theme_name?.toLowerCase().includes('big bet') || (c.metric_key === 'wins' && c.use_chips);
+};
+
+export const getContestColumnInfo = (contest: Contest) => {
+  const name = contest.theme_name || contest.id;
+  const monthMatch = name.match(/(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i);
+  const shortMonth = monthMatch ? monthMatch[0].slice(0, 3).toUpperCase() : name.slice(0, 3).toUpperCase();
+  
+  let metricLabel = 'PTS';
+  if (contest.metric_key === 'defense') metricLabel = 'DEF';
+  else if (contest.metric_key === 'hrs') metricLabel = 'HR';
+  else if (contest.metric_key === 'ks') metricLabel = 'K';
+  else if (contest.metric_key === 'stolenBases') metricLabel = 'SB';
+  else if (contest.metric_key === 'wins') metricLabel = 'WINS';
+
+  return { shortMonth, metricLabel, fullName: name };
+};
+
 export default function Dashboard() {
   const [userState, setUserState] = useState<UserProfile | null>(null);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [teams, setTeams] = useState<TeamLine[]>([]);
   const [contests, setContests] = useState<Contest[]>([]);
   const [activeContest, setActiveContest] = useState<Contest | null>(null);
-  const isBigBet = activeContest?.id === 'big-bet' || activeContest?.id === 'season_2026' || activeContest?.theme_name?.toLowerCase().includes('big bet') || (activeContest?.metric_key === 'wins' && activeContest?.use_chips);
+  const isBigBet = isSeasonBigBetContest(activeContest);
+  const bigBetContest = useMemo(() => contests.find(isSeasonBigBetContest), [contests]);
+  const monthlyContests = useMemo(() => {
+    return contests
+      .filter(c => !isSeasonBigBetContest(c))
+      .sort((a, b) => parseDate(a.start_time).getTime() - parseDate(b.start_time).getTime());
+  }, [contests]);
   const [userEntry, setUserEntry] = useState<Entry | null>(null);
   const [allEntries, setAllEntries] = useState<Entry[]>([]);
   const [rawUsers, setRawUsers] = useState<UserProfile[]>([]);
@@ -153,32 +203,94 @@ export default function Dashboard() {
     };
   }, [contests]);
 
-  // Compute dynamic leaderboard
-  const leaderboard = useMemo(() => {
+  // Compute dynamic leaderboard with full contest breakdown
+  const leaderboard: LeaderboardPlayer[] = useMemo(() => {
     if (rawUsers.length === 0) return [];
 
     // Initialize map of user ID -> dynamic total_cp
     const userCPMap: Record<string, number> = {};
+    const userMonthlyBreakdown: Record<string, Record<string, ContestCPDetail>> = {};
+    const userBigBetMap: Record<string, BigBetDetail> = {};
+
     rawUsers.forEach(u => {
       userCPMap[u.uid] = 0;
+      userMonthlyBreakdown[u.uid] = {};
+      userBigBetMap[u.uid] = { cp: 0, clinchedCount: 0, totalPicks: 0, hasEntry: false };
     });
 
-    // Award points standard: Rank 1 gets 9, Rank 2 gets 6, Rank 3 gets 3
+    // Identify Big Bet contest and Monthly Contests
+    const bigBetContest = contests.find(isSeasonBigBetContest);
+    const monthlyContestsList = contests
+      .filter(c => !isSeasonBigBetContest(c))
+      .sort((a, b) => parseDate(a.start_time).getTime() - parseDate(b.start_time).getTime());
+
+    // 1. Process Big Bet Contest: Clinched picks award their chips directly to user CP
+    if (bigBetContest) {
+      const bbEntries = allContestEntries[bigBetContest.id] || [];
+      bbEntries.forEach(entry => {
+        let clinchedCP = 0;
+        let clinchedCount = 0;
+        const totalPicks = entry.selections.length;
+
+        entry.selections.forEach(sel => {
+          const team = teams.find(t => t.id === sel.team_id);
+          if (team) {
+            const endVal = bigBetContest.ending_stats?.[team.id];
+            const wins = endVal !== undefined ? endVal : team.stats.wins;
+            const gamesRemaining = (bigBetContest.results_sealed || endVal !== undefined) ? 0 : (162 - (team.stats.wins + team.stats.losses));
+            const isClinched = sel.side === 'over' 
+              ? wins > team.ou_line 
+              : (wins + gamesRemaining) < team.ou_line;
+            if (isClinched) {
+              clinchedCP += (bigBetContest.use_chips ? (sel.chips || 0) : 1);
+              clinchedCount++;
+            }
+          }
+        });
+
+        if (userCPMap[entry.uid] !== undefined) {
+          userCPMap[entry.uid] += clinchedCP;
+        }
+        userBigBetMap[entry.uid] = {
+          cp: clinchedCP,
+          clinchedCount,
+          totalPicks,
+          hasEntry: true
+        };
+      });
+    }
+
+    // 2. Process Monthly Contests: Rank 1 gets 9 CP, Rank 2 gets 6 CP, Rank 3 gets 3 CP
     const rewardPointsMap: Record<number, number> = { 0: 9, 1: 6, 2: 3 };
 
-    // Loop over each contest and check if points are awarded
-    contests.forEach(contest => {
-      const isSeasonBigBet = contest.id === 'season_2026' || contest.id === 'big-bet' || contest.theme_name?.toLowerCase().includes('big bet') || (contest.metric_key === 'wins' && contest.use_chips);
+    monthlyContestsList.forEach(contest => {
       const entries = allContestEntries[contest.id] || [];
+      const now = new Date();
+      const isStarted = parseDate(contest.start_time) <= now;
+      const isCompleted = parseDate(contest.end_time) <= now;
+      const status: 'completed' | 'active' | 'upcoming' = isCompleted ? 'completed' : isStarted ? 'active' : 'upcoming';
+
+      // Default all users for this contest
+      rawUsers.forEach(u => {
+        userMonthlyBreakdown[u.uid][contest.id] = {
+          cp: 0,
+          score: 0,
+          rank: undefined,
+          status,
+          isAwarded: !!contest.points_awarded,
+          hasEntry: false
+        };
+      });
+
       if (entries.length === 0) return;
 
-      if (isSeasonBigBet) {
-        // For Big Bet, each selection that has already clinched/been successful awards its chips as Championship Points (CPs)
-        entries.forEach(entry => {
-          let clinchedCP = 0;
-          entry.selections.forEach(sel => {
-            const team = teams.find(t => t.id === sel.team_id);
-            if (team) {
+      // Score each entry
+      const scored = entries.map(entry => {
+        let score = 0;
+        entry.selections.forEach(sel => {
+          const team = teams.find(t => t.id === sel.team_id);
+          if (team) {
+            if (contest.metric_key === 'wins') {
               const endVal = contest.ending_stats?.[team.id];
               const wins = endVal !== undefined ? endVal : team.stats.wins;
               const gamesRemaining = (contest.results_sealed || endVal !== undefined) ? 0 : (162 - (team.stats.wins + team.stats.losses));
@@ -186,72 +298,39 @@ export default function Dashboard() {
                 ? wins > team.ou_line 
                 : (wins + gamesRemaining) < team.ou_line;
               if (isClinched) {
-                clinchedCP += (contest.use_chips ? (sel.chips || 0) : 1);
-              }
-            }
-          });
-          if (clinchedCP > 0 && userCPMap[entry.uid] !== undefined) {
-            userCPMap[entry.uid] += clinchedCP;
-          }
-        });
-        return;
-      }
-
-      if (!contest.points_awarded) return;
-
-      // Score each entry
-      const scored = entries.map(entry => {
-        let score = 0;
-        const now = new Date();
-        const isStarted = parseDate(contest.start_time) <= now;
-
-        entry.selections.forEach(sel => {
-          const team = teams.find(t => t.id === sel.team_id);
-          if (team) {
-            if (contest.metric_key === 'wins') {
-              const endVal = contest.ending_stats?.[team.id];
-              const wins = endVal !== undefined ? endVal : team.stats.wins;
-              
-              const gamesRemaining = 162 - (team.stats.wins + team.stats.losses);
-              const isClinched = sel.side === 'over' 
-                ? wins > team.ou_line 
-                : (wins + gamesRemaining) < team.ou_line;
-              if (isClinched) {
                 score += (contest.use_chips ? (sel.chips || 0) : 1);
               }
+            } else if (contest.metric_key === 'defense') {
+              const startDP = (contest as any).starting_doublePlays?.[team.id] || 0;
+              const startCS = (contest as any).starting_caughtStealing?.[team.id] || 0;
+              const startErr = (contest as any).starting_errors?.[team.id] || 0;
+
+              const rawDP = (contest as any).ending_doublePlays?.[team.id] !== undefined 
+                ? (contest as any).ending_doublePlays[team.id] 
+                : (team.stats.doublePlays || 0);
+              const rawCS = (contest as any).ending_caughtStealing?.[team.id] !== undefined 
+                ? (contest as any).ending_caughtStealing[team.id] 
+                : (team.stats.caughtStealing || 0);
+              const rawErr = (contest as any).ending_errors?.[team.id] !== undefined 
+                ? (contest as any).ending_errors[team.id] 
+                : (team.stats.errors || 0);
+
+              const dpVal = isStarted ? Math.max(0, rawDP - startDP) : 0;
+              const csVal = isStarted ? Math.max(0, rawCS - startCS) : 0;
+              const errVal = isStarted ? Math.max(0, rawErr - startErr) : 0;
+              score += dpVal + csVal - errVal;
             } else {
-              if (contest.metric_key === 'defense') {
-                const startDP = (contest as any).starting_doublePlays?.[team.id] || 0;
-                const startCS = (contest as any).starting_caughtStealing?.[team.id] || 0;
-                const startErr = (contest as any).starting_errors?.[team.id] || 0;
-
-                const rawDP = (contest as any).ending_doublePlays?.[team.id] !== undefined 
-                  ? (contest as any).ending_doublePlays[team.id] 
-                  : (team.stats.doublePlays || 0);
-                const rawCS = (contest as any).ending_caughtStealing?.[team.id] !== undefined 
-                  ? (contest as any).ending_caughtStealing[team.id] 
-                  : (team.stats.caughtStealing || 0);
-                const rawErr = (contest as any).ending_errors?.[team.id] !== undefined 
-                  ? (contest as any).ending_errors[team.id] 
-                  : (team.stats.errors || 0);
-
-                const dpVal = isStarted ? Math.max(0, rawDP - startDP) : 0;
-                const csVal = isStarted ? Math.max(0, rawCS - startCS) : 0;
-                const errVal = isStarted ? Math.max(0, rawErr - startErr) : 0;
-                score += dpVal + csVal - errVal;
-              } else {
-                const endVal = contest.ending_stats?.[team.id];
-                const val = endVal !== undefined ? endVal : (team.stats[contest.metric_key as keyof typeof team.stats] || 0);
-                const startVal = contest.starting_stats?.[team.id] || 0;
-                score += isStarted ? Math.max(0, val - startVal) : 0;
-              }
+              const endVal = contest.ending_stats?.[team.id];
+              const val = endVal !== undefined ? endVal : (team.stats[contest.metric_key as keyof typeof team.stats] || 0);
+              const startVal = contest.starting_stats?.[team.id] || 0;
+              score += isStarted ? Math.max(0, val - startVal) : 0;
             }
           }
         });
         return { uid: entry.uid, score };
       }).sort((a, b) => b.score - a.score);
 
-      // Rank entries with ties
+      // Rank entries with standard ties logic
       let currentRank = 0;
       const ranked = scored.map((entry, index) => {
         if (index > 0 && entry.score < scored[index - 1].score) {
@@ -260,20 +339,49 @@ export default function Dashboard() {
         return { ...entry, rank: currentRank };
       });
 
-      // Distribute points to users
+      // Distribute points to users: counted if contest has ended or points were awarded by admin
+      const isOfficialCounted = contest.points_awarded || isCompleted;
+
       ranked.forEach(r => {
         const points = rewardPointsMap[r.rank] || 0;
-        if (points > 0 && userCPMap[r.uid] !== undefined) {
+        if (isOfficialCounted && points > 0 && userCPMap[r.uid] !== undefined) {
           userCPMap[r.uid] += points;
+        }
+        if (userMonthlyBreakdown[r.uid]) {
+          userMonthlyBreakdown[r.uid][contest.id] = {
+            cp: points,
+            score: r.score,
+            rank: r.rank + 1,
+            status,
+            isAwarded: !!contest.points_awarded,
+            hasEntry: true
+          };
         }
       });
     });
 
-    // Create leaderboard from users and sort by dynamically calculated CP
-    return rawUsers.map(u => ({
-      ...u,
-      total_cp: userCPMap[u.uid] !== undefined ? userCPMap[u.uid] : 0
-    })).sort((a, b) => b.total_cp - a.total_cp);
+    // Create leaderboard from users and sort by dynamically calculated total_cp
+    return rawUsers.map(u => {
+      const bbData = userBigBetMap[u.uid] || { cp: 0, clinchedCount: 0, totalPicks: 0, hasEntry: false };
+      const userBreakdown = userMonthlyBreakdown[u.uid] || {};
+      let monthlyTotal = 0;
+
+      monthlyContestsList.forEach(c => {
+        const d = userBreakdown[c.id];
+        if (d && (d.status === 'completed' || d.isAwarded)) {
+          monthlyTotal += d.cp;
+        }
+      });
+
+      return {
+        ...u,
+        total_cp: userCPMap[u.uid] !== undefined ? userCPMap[u.uid] : 0,
+        monthlyCPTotal: monthlyTotal,
+        bigBetCP: bbData.cp,
+        bigBetDetail: bbData,
+        contestBreakdown: userBreakdown
+      };
+    }).sort((a, b) => b.total_cp - a.total_cp);
   }, [rawUsers, contests, allContestEntries, teams]);
 
   // Derive user with dynamically calculated CP
@@ -303,7 +411,7 @@ export default function Dashboard() {
   const [view, setView] = useState<'dashboard' | 'drafting' | 'admin' | 'standings'>('dashboard');
   const [dashboardView, setDashboardView] = useState<'overview' | 'detail'>('overview');
   const [detailTab, setDetailTab] = useState<'my_slip' | 'standings'>('standings');
-  const [selectedRival, setSelectedRival] = useState<{ user: UserProfile, entry: Entry } | null>(null);
+  const [selectedRival, setSelectedRival] = useState<{ user: UserProfile, entry: Entry, contest?: Contest } | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -562,11 +670,12 @@ export default function Dashboard() {
     return () => unsubEntries();
   }, [activeContest?.id]);
 
-  const showRival = async (rival: UserProfile) => {
-    if (!activeContest) return;
+  const showRival = async (rival: UserProfile, targetContest?: Contest) => {
+    const contestToView = targetContest || activeContest || contests.find(c => c.is_active) || contests[0];
+    if (!contestToView) return;
     
     const isAdminUser = user?.role === 'admin' || currentUserEmail?.toLowerCase() === 'kebrahim@gmail.com';
-    const contestLocked = parseDate(activeContest.start_time).getTime() < Date.now();
+    const contestLocked = parseDate(contestToView.start_time).getTime() < Date.now();
 
     if (!contestLocked && !isAdminUser && rival.uid !== auth.currentUser?.uid) {
       toast.error("Rival picks are hidden until the contest starts!", {
@@ -582,12 +691,12 @@ export default function Dashboard() {
     }
 
     try {
-      const entryRef = doc(db, 'contests', activeContest.id, 'entries', rival.uid);
+      const entryRef = doc(db, 'contests', contestToView.id, 'entries', rival.uid);
       const snap = await getDoc(entryRef);
       if (snap.exists()) {
-        setSelectedRival({ user: rival, entry: snap.data() as Entry });
+        setSelectedRival({ user: rival, entry: snap.data() as Entry, contest: contestToView });
       } else {
-        toast.error(`${rival.display_name} hasn't saved a slip yet.`);
+        toast.error(`${rival.display_name} hasn't saved a slip for ${contestToView.theme_name}.`);
       }
     } catch (error) {
       console.error("Error fetching rival entry:", error);
@@ -1090,46 +1199,236 @@ export default function Dashboard() {
 
                       {/* Championship Standings */}
                       <section className="space-y-4 md:space-y-6">
-                        <div className="flex items-center justify-between">
-                          <h2 className="text-xl md:text-2xl font-varsity text-slate-900 flex items-center gap-3 uppercase tracking-tighter">
-                            <Trophy className="text-[var(--color-stitch-red)]" size={24} />
-                            LEAGUE STANDINGS
-                          </h2>
-                          <div className="hidden sm:block text-[10px] font-varsity text-slate-500 uppercase tracking-[0.2em]">Season 2026</div>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div>
+                            <div className="flex items-center gap-2.5">
+                              <Trophy className="text-[var(--color-stitch-red)]" size={24} />
+                              <h2 className="text-xl md:text-2xl font-varsity text-slate-900 uppercase tracking-tighter">
+                                LEAGUE STANDINGS
+                              </h2>
+                            </div>
+                            <p className="text-xs text-slate-500 font-varsity uppercase tracking-wider mt-1">
+                              Championship Points (CP) breakdown across each monthly sprint and the season-long Big Bet
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 self-start sm:self-auto">
+                            <span className="px-3 py-1 bg-white border-2 border-stitch text-[var(--color-stitch-red)] font-varsity text-[10px] rounded-full uppercase tracking-widest shadow-2xs">
+                              Season 2026
+                            </span>
+                          </div>
                         </div>
                         
                         <div className="bg-scorebook rounded-[1.5rem] md:rounded-[2.5rem] border-4 border-stitch overflow-hidden shadow-xl">
-                          <div className="grid grid-cols-12 px-4 md:px-6 py-2 md:py-2 bg-slate-100/50 border-b-2 border-slate-200 text-[8px] md:text-[10px] font-varsity text-slate-500 uppercase tracking-widest">
-                            <div className="col-span-2 md:col-span-1">Rank</div>
-                            <div className="col-span-6 md:col-span-7">Contestant</div>
-                            <div className="col-span-4 text-right">Total CP</div>
+                          <div className="overflow-x-auto custom-scrollbar">
+                            <table className="w-full text-left border-collapse min-w-[760px] md:min-w-[880px]">
+                              <thead>
+                                <tr className="bg-slate-100/90 border-b-2 border-slate-200 text-[9px] md:text-[10px] font-varsity text-slate-600 uppercase tracking-widest select-none">
+                                  <th className="py-3 px-3 md:px-4 w-12 md:w-14 text-center">Rank</th>
+                                  <th className="py-3 px-4 min-w-[180px]">Contestant</th>
+                                  {monthlyContests.map(c => {
+                                    const info = getContestColumnInfo(c);
+                                    const isCompleted = parseDate(c.end_time) <= new Date();
+                                    const isStarted = parseDate(c.start_time) <= new Date();
+                                    return (
+                                      <th 
+                                        key={c.id} 
+                                        className="py-3 px-3 text-center min-w-[95px] border-l border-slate-200/60"
+                                        title={`${info.fullName} (${formatMetric(c.metric_key)}) — 1st: 9 CP, 2nd: 6 CP, 3rd: 3 CP`}
+                                      >
+                                        <div className="flex flex-col items-center leading-tight">
+                                          <span className="font-black text-slate-800 text-xs tracking-tight">{info.shortMonth}</span>
+                                          <div className="flex items-center gap-1 mt-0.5">
+                                            <span className="text-[8px] font-mono text-slate-500 font-bold">{info.metricLabel}</span>
+                                            {isCompleted ? (
+                                              <span className="text-[7px] px-1 py-0.2 bg-slate-200/90 text-slate-700 rounded font-bold">FINAL</span>
+                                            ) : isStarted ? (
+                                              <span className="text-[7px] px-1 py-0.2 bg-emerald-100 text-emerald-800 rounded font-bold animate-pulse">LIVE</span>
+                                            ) : (
+                                              <span className="text-[7px] px-1 py-0.2 bg-slate-100 text-slate-400 rounded font-bold">SOON</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </th>
+                                    );
+                                  })}
+                                  {bigBetContest && (
+                                    <th 
+                                      className="py-3 px-3 text-center min-w-[110px] border-l border-slate-200/60 bg-emerald-50/50"
+                                      title="Season 2026: Big Bet — 100 confidence chips wagered on Over/Under win totals"
+                                    >
+                                      <div className="flex flex-col items-center leading-tight">
+                                        <span className="font-black text-emerald-950 text-xs tracking-tight">BIG BET</span>
+                                        <div className="flex items-center gap-1 mt-0.5">
+                                          <span className="text-[8px] font-mono text-emerald-700 font-bold">O/U WINS</span>
+                                          <span className="text-[7px] px-1 py-0.2 bg-emerald-100 text-emerald-800 rounded font-bold">100 CP</span>
+                                        </div>
+                                      </div>
+                                    </th>
+                                  )}
+                                  <th className="py-3 px-4 text-right min-w-[110px] border-l-2 border-slate-300 bg-amber-50/70">
+                                    <div className="flex flex-col items-end leading-tight">
+                                      <span className="font-black text-slate-900 text-xs tracking-tight">TOTAL CP</span>
+                                      <span className="text-[8px] font-mono text-amber-800 font-bold mt-0.5">STANDINGS</span>
+                                    </div>
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y-2 divide-slate-200/80 bg-scorebook">
+                                {leaderboard.map((player) => {
+                                  const rank = leaderboard.findIndex(p => p.total_cp === player.total_cp) + 1;
+                                  const isTop1 = rank === 1 && player.total_cp > 0;
+                                  const isTop2 = rank === 2 && player.total_cp > 0;
+                                  const isTop3 = rank === 3 && player.total_cp > 0;
+
+                                  return (
+                                    <tr 
+                                      key={player.uid}
+                                      className="hover:bg-blue-50/50 transition-colors group cursor-pointer"
+                                    >
+                                      {/* Rank */}
+                                      <td 
+                                        onClick={() => showRival(player)}
+                                        className="py-3 px-3 md:px-4 text-center font-scorebook text-xs md:text-sm text-slate-500"
+                                      >
+                                        <div className="flex items-center justify-center">
+                                          {isTop1 ? (
+                                            <span className="w-6 h-6 rounded-full bg-amber-400 text-amber-950 font-varsity font-black flex items-center justify-center text-xs shadow-xs">
+                                              1
+                                            </span>
+                                          ) : isTop2 ? (
+                                            <span className="w-6 h-6 rounded-full bg-slate-300 text-slate-900 font-varsity font-bold flex items-center justify-center text-xs shadow-xs">
+                                              2
+                                            </span>
+                                          ) : isTop3 ? (
+                                            <span className="w-6 h-6 rounded-full bg-orange-300 text-orange-950 font-varsity font-bold flex items-center justify-center text-xs shadow-xs">
+                                              3
+                                            </span>
+                                          ) : (
+                                            <span>{rank}</span>
+                                          )}
+                                        </div>
+                                      </td>
+
+                                      {/* Contestant */}
+                                      <td 
+                                        onClick={() => showRival(player)}
+                                        className="py-3 px-4"
+                                      >
+                                        <div className="flex items-center gap-3">
+                                          <div className="w-8 h-8 md:w-9 md:h-9 bg-white rounded-full flex items-center justify-center font-varsity text-[var(--color-stitch-red)] border-2 border-stitch group-hover:scale-105 transition-transform shrink-0 text-xs md:text-sm shadow-xs">
+                                            {player.display_name?.[0]}
+                                          </div>
+                                          <div className="flex flex-col min-w-0">
+                                            <span className="font-varsity text-slate-900 group-hover:text-[var(--color-stitch-red)] transition-colors truncate text-xs md:text-sm uppercase tracking-tight font-bold">
+                                              {player.display_name}
+                                            </span>
+                                            <span className="text-[8px] md:text-[9px] text-slate-500 uppercase tracking-widest font-varsity truncate">
+                                              {player.role}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </td>
+
+                                      {/* Monthly Contests */}
+                                      {monthlyContests.map(c => {
+                                        const detail = player.contestBreakdown?.[c.id];
+                                        const hasPoints = detail && detail.cp > 0;
+                                        const hasEntry = detail && detail.hasEntry;
+
+                                        return (
+                                          <td 
+                                            key={c.id} 
+                                            onClick={() => showRival(player, c)}
+                                            className="py-3 px-3 text-center border-l border-slate-200/60 hover:bg-blue-100/40 transition-colors"
+                                            title={hasEntry 
+                                              ? `${c.theme_name}: Place #${detail.rank} (${detail.score} ${formatMetric(c.metric_key)}) • ${detail.cp} CP earned`
+                                              : `${c.theme_name}: Did not enter`
+                                            }
+                                          >
+                                            {hasPoints ? (
+                                              <div className={`inline-flex items-center justify-center px-2 py-0.5 rounded-md font-varsity text-xs md:text-sm font-black tracking-tight border shadow-2xs ${
+                                                detail.rank === 1 
+                                                  ? 'bg-amber-100 border-amber-300 text-amber-900'
+                                                  : detail.rank === 2
+                                                    ? 'bg-slate-200 border-slate-300 text-slate-800'
+                                                    : 'bg-orange-100 border-orange-300 text-orange-900'
+                                              }`}>
+                                                +{detail.cp}
+                                                <span className="text-[8px] font-mono ml-0.5 opacity-80">CP</span>
+                                              </div>
+                                            ) : hasEntry ? (
+                                              <span className="font-varsity text-slate-400 text-xs md:text-sm">
+                                                0
+                                              </span>
+                                            ) : (
+                                              <span className="font-varsity text-slate-300 text-xs md:text-sm">
+                                                —
+                                              </span>
+                                            )}
+                                          </td>
+                                        );
+                                      })}
+
+                                      {/* Big Bet */}
+                                      {bigBetContest && (
+                                        <td 
+                                          onClick={() => showRival(player, bigBetContest)}
+                                          className="py-3 px-3 text-center border-l border-slate-200/60 bg-emerald-50/30 hover:bg-emerald-100/50 transition-colors"
+                                          title={player.bigBetDetail.hasEntry 
+                                            ? `Big Bet: ${player.bigBetCP} CP clinched (${player.bigBetDetail.clinchedCount}/${player.bigBetDetail.totalPicks} picks clinched)`
+                                            : 'Big Bet: No picks entered'
+                                          }
+                                        >
+                                          {player.bigBetCP > 0 ? (
+                                            <div className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-md font-varsity text-xs md:text-sm font-black tracking-tight bg-emerald-100 border border-emerald-300 text-emerald-900 shadow-2xs">
+                                              +{player.bigBetCP}
+                                              <span className="text-[8px] font-mono ml-0.5 opacity-80">CP</span>
+                                            </div>
+                                          ) : player.bigBetDetail.hasEntry ? (
+                                            <span className="font-varsity text-slate-400 text-xs md:text-sm">
+                                              0
+                                            </span>
+                                          ) : (
+                                            <span className="font-varsity text-slate-300 text-xs md:text-sm">
+                                              —
+                                            </span>
+                                          )}
+                                        </td>
+                                      )}
+
+                                      {/* Total CP */}
+                                      <td 
+                                        onClick={() => showRival(player)}
+                                        className="py-3 px-4 text-right border-l-2 border-slate-300 bg-amber-50/50 group-hover:bg-amber-100/60 transition-colors"
+                                      >
+                                        <span className="text-lg md:text-2xl font-varsity text-slate-900 tabular-nums tracking-tighter font-black">
+                                          {player.total_cp}
+                                        </span>
+                                        <span className="text-[8px] md:text-[10px] font-varsity text-slate-500 ml-1 md:ml-1.5 uppercase font-bold">
+                                          CP
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
                           </div>
-                          <div className="divide-y-2 divide-slate-200/80">
-                            {leaderboard.map((player, idx) => {
-                              const rank = leaderboard.findIndex(p => p.total_cp === player.total_cp) + 1;
-                              return (
-                                <div 
-                                  key={player.uid}
-                                  onClick={() => showRival(player)}
-                                  className="grid grid-cols-12 px-4 md:px-6 py-2 md:py-3 items-center hover:bg-blue-50/50 transition-colors group cursor-pointer"
-                                >
-                                  <div className="col-span-2 md:col-span-1 font-scorebook text-slate-500 text-xs md:text-sm">{rank}</div>
-                                  <div className="col-span-6 md:col-span-7 flex items-center gap-3 md:gap-4">
-                                    <div className="w-8 h-8 md:w-10 md:h-10 bg-white rounded-full flex items-center justify-center font-varsity text-[var(--color-stitch-red)] border-2 border-stitch group-hover:scale-110 transition-transform shrink-0 text-xs md:text-base shadow-sm">
-                                      {player.display_name?.[0]}
-                                    </div>
-                                    <div className="flex flex-col min-w-0">
-                                      <span className="font-varsity text-slate-900 group-hover:text-[var(--color-stitch-red)] transition-colors truncate text-xs md:text-base uppercase tracking-tight">{player.display_name}</span>
-                                      <span className="text-[8px] md:text-[10px] text-slate-500 uppercase tracking-widest font-varsity truncate">{player.role}</span>
-                                    </div>
-                                  </div>
-                                  <div className="col-span-4 text-right">
-                                    <span className="text-lg md:text-2xl font-varsity text-slate-900 tabular-nums tracking-tighter">{player.total_cp}</span>
-                                    <span className="text-[8px] md:text-[10px] font-varsity text-slate-500 ml-1 md:ml-2 uppercase">CP</span>
-                                  </div>
-                                </div>
-                              );
-                            })}
+
+                          {/* Table Footer / Legend */}
+                          <div className="px-4 py-2.5 bg-slate-50 border-t-2 border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[10px] font-varsity text-slate-500 uppercase tracking-wider">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                              <span>Click any contestant or contest cell to inspect their slip</span>
+                            </div>
+                            <div className="hidden sm:flex items-center gap-3 text-slate-400 font-mono">
+                              <span>Monthly Sprints: 1st (9 CP) • 2nd (6 CP) • 3rd (3 CP)</span>
+                              <span>•</span>
+                              <span>Big Bet: Clinched Chips (100 Max)</span>
+                            </div>
+                            <div className="sm:hidden text-slate-400 flex items-center gap-1">
+                              <span>← Scroll horizontally to view all contests →</span>
+                            </div>
                           </div>
                         </div>
                       </section>
@@ -2154,7 +2453,9 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <h3 className="text-xl font-varsity text-slate-900 uppercase tracking-tight">{selectedRival.user.display_name}'s Slip</h3>
-                      <p className="text-xs text-slate-500 uppercase tracking-widest font-varsity">Locked Entry</p>
+                      <p className="text-xs text-slate-500 uppercase tracking-widest font-varsity">
+                        Locked Entry • {(selectedRival.contest || activeContest || contests[0])?.theme_name}
+                      </p>
                     </div>
                   </div>
                   <button 
@@ -2165,201 +2466,206 @@ export default function Dashboard() {
                   </button>
                 </div>
                 <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto bg-scorebook">
-                  {[...selectedRival.entry.selections].sort((a, b) => b.chips - a.chips).map(sel => {
-                    const team = teams.find(t => t.id === sel.team_id);
-                    if (!team) return null;
-                    
-                    if (activeContest.metric_key !== 'wins') {
-                      const endVal = activeContest.ending_stats?.[team.id];
-                      const rawValue = endVal !== undefined ? endVal : (team.stats[activeContest.metric_key as keyof typeof team.stats] || 0);
-                      const startValue = activeContest.starting_stats?.[team.id] || 0;
-                      const isStarted = parseDate(activeContest.start_time) <= new Date();
-                      const metricValue = isStarted ? Math.max(0, rawValue - startValue) : 0;
+                  {(() => {
+                    const targetContest = selectedRival.contest || activeContest || contests[0];
+                    const isContestBigBet = isSeasonBigBetContest(targetContest);
 
-                      if (activeContest.metric_key === 'defense') {
-                        const startDP = (activeContest as any).starting_doublePlays?.[team.id] || 0;
-                        const startCS = (activeContest as any).starting_caughtStealing?.[team.id] || 0;
-                        const startErr = (activeContest as any).starting_errors?.[team.id] || 0;
+                    return [...selectedRival.entry.selections].sort((a, b) => b.chips - a.chips).map(sel => {
+                      const team = teams.find(t => t.id === sel.team_id);
+                      if (!team) return null;
+                      
+                      if (targetContest.metric_key !== 'wins') {
+                        const endVal = targetContest.ending_stats?.[team.id];
+                        const rawValue = endVal !== undefined ? endVal : (team.stats[targetContest.metric_key as keyof typeof team.stats] || 0);
+                        const startValue = targetContest.starting_stats?.[team.id] || 0;
+                        const isStarted = parseDate(targetContest.start_time) <= new Date();
+                        const metricValue = isStarted ? Math.max(0, rawValue - startValue) : 0;
 
-                        const rawDP = (activeContest as any).ending_doublePlays?.[team.id] !== undefined 
-                          ? (activeContest as any).ending_doublePlays[team.id] 
-                          : (team.stats.doublePlays || 0);
-                        const rawCS = (activeContest as any).ending_caughtStealing?.[team.id] !== undefined 
-                          ? (activeContest as any).ending_caughtStealing[team.id] 
-                          : (team.stats.caughtStealing || 0);
-                        const rawErr = (activeContest as any).ending_errors?.[team.id] !== undefined 
-                          ? (activeContest as any).ending_errors[team.id] 
-                          : (team.stats.errors || 0);
+                        if (targetContest.metric_key === 'defense') {
+                          const startDP = (targetContest as any).starting_doublePlays?.[team.id] || 0;
+                          const startCS = (targetContest as any).starting_caughtStealing?.[team.id] || 0;
+                          const startErr = (targetContest as any).starting_errors?.[team.id] || 0;
 
-                        const dpVal = isStarted ? Math.max(0, rawDP - startDP) : 0;
-                        const csVal = isStarted ? Math.max(0, rawCS - startCS) : 0;
-                        const errVal = isStarted ? Math.max(0, rawErr - startErr) : 0;
-                        const defVal = dpVal + csVal - errVal;
+                          const rawDP = (targetContest as any).ending_doublePlays?.[team.id] !== undefined 
+                            ? (targetContest as any).ending_doublePlays[team.id] 
+                            : (team.stats.doublePlays || 0);
+                          const rawCS = (targetContest as any).ending_caughtStealing?.[team.id] !== undefined 
+                            ? (targetContest as any).ending_caughtStealing[team.id] 
+                            : (team.stats.caughtStealing || 0);
+                          const rawErr = (targetContest as any).ending_errors?.[team.id] !== undefined 
+                            ? (targetContest as any).ending_errors[team.id] 
+                            : (team.stats.errors || 0);
 
-                        return (
-                          <div key={sel.team_id} className="bg-white p-5 rounded-2xl border-2 border-slate-200 shadow-sm flex flex-col gap-3">
-                            <div className="flex justify-between items-center">
-                              <div>
-                                <div className="font-varsity text-slate-900 uppercase tracking-tight text-base">{team.team_name}</div>
-                                <div className="text-[9px] text-slate-500 uppercase tracking-widest font-varsity">
-                                  {activeContest.is_draft ? 'Draft Pick' : 'Selection'}
+                          const dpVal = isStarted ? Math.max(0, rawDP - startDP) : 0;
+                          const csVal = isStarted ? Math.max(0, rawCS - startCS) : 0;
+                          const errVal = isStarted ? Math.max(0, rawErr - startErr) : 0;
+                          const defVal = dpVal + csVal - errVal;
+
+                          return (
+                            <div key={sel.team_id} className="bg-white p-5 rounded-2xl border-2 border-slate-200 shadow-sm flex flex-col gap-3">
+                              <div className="flex justify-between items-center">
+                                <div>
+                                  <div className="font-varsity text-slate-900 uppercase tracking-tight text-base">{team.team_name}</div>
+                                  <div className="text-[9px] text-slate-500 uppercase tracking-widest font-varsity">
+                                    {targetContest.is_draft ? 'Draft Pick' : 'Selection'}
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-2xl font-varsity text-blue-600 tabular-nums tracking-tighter">
+                                    {defVal}
+                                  </div>
+                                  <div className="text-[9px] text-slate-400 uppercase tracking-widest font-varsity leading-none">
+                                    Defensive Score
+                                  </div>
                                 </div>
                               </div>
-                              <div className="text-right">
-                                <div className="text-2xl font-varsity text-blue-600 tabular-nums tracking-tighter">
-                                  {defVal}
+
+                              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-[10px] space-y-1.5 font-varsity uppercase tracking-wider text-slate-600">
+                                <div className="flex justify-between items-center">
+                                  <span>Double Plays Turned:</span>
+                                  <span className="font-mono text-emerald-600 font-bold">+{dpVal} <span className="text-[8px] text-slate-400">({startDP} → {rawDP})</span></span>
                                 </div>
-                                <div className="text-[9px] text-slate-400 uppercase tracking-widest font-varsity leading-none">
-                                  Defensive Score
+                                <div className="flex justify-between items-center">
+                                  <span>Caught Stealing:</span>
+                                  <span className="font-mono text-emerald-600 font-bold">+{csVal} <span className="text-[8px] text-slate-400">({startCS} → {rawCS})</span></span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span>Errors Committed:</span>
+                                  <span className="font-mono text-rose-500 font-bold">-{errVal} <span className="text-[8px] text-slate-400">({startErr} → {rawErr})</span></span>
+                                </div>
+                                <div className="h-px bg-slate-200 my-0.5" />
+                                <div className="flex justify-between items-center text-[11px] font-black text-slate-800">
+                                  <span>Calculation:</span>
+                                  <span>{dpVal} + {csVal} - {errVal} = {defVal}</span>
                                 </div>
                               </div>
                             </div>
+                          );
+                        }
 
-                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-[10px] space-y-1.5 font-varsity uppercase tracking-wider text-slate-600">
-                              <div className="flex justify-between items-center">
-                                <span>Double Plays Turned:</span>
-                                <span className="font-mono text-emerald-600 font-bold">+{dpVal} <span className="text-[8px] text-slate-400">({startDP} → {rawDP})</span></span>
+                        return (
+                          <div key={sel.team_id} className="flex justify-between items-center p-4 rounded-xl border-2 border-slate-100 shadow-sm">
+                            <div>
+                              <div className="font-varsity text-slate-900 uppercase tracking-tight">{team.team_name}</div>
+                              <div className="text-[10px] text-slate-500 uppercase tracking-widest font-varsity">
+                                {targetContest.is_draft ? 'Draft Pick' : 'Selection'}
                               </div>
-                              <div className="flex justify-between items-center">
-                                <span>Caught Stealing:</span>
-                                <span className="font-mono text-emerald-600 font-bold">+{csVal} <span className="text-[8px] text-slate-400">({startCS} → {rawCS})</span></span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span>Errors Committed:</span>
-                                <span className="font-mono text-rose-500 font-bold">-{errVal} <span className="text-[8px] text-slate-400">({startErr} → {rawErr})</span></span>
-                              </div>
-                              <div className="h-px bg-slate-200 my-0.5" />
-                              <div className="flex justify-between items-center text-[11px] font-black text-slate-800">
-                                <span>Calculation:</span>
-                                <span>{dpVal} + {csVal} - {errVal} = {defVal}</span>
-                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-varsity text-blue-600 uppercase tracking-tight">{metricValue} {formatMetric(targetContest.metric_key)}</div>
                             </div>
                           </div>
                         );
                       }
 
+                      const endVal = targetContest.ending_stats?.[team.id];
+                      const wins = endVal !== undefined ? endVal : team.stats.wins;
+                      const gamesPlayed = team.stats.wins + team.stats.losses;
+                      const projectedWins = gamesPlayed > 0 ? Math.round((wins / gamesPlayed) * 162) : 0;
+                      const isTrendingCorrect = sel.side === 'over' ? projectedWins > team.ou_line : projectedWins < team.ou_line;
+
+                      const gamesRemaining = (targetContest.results_sealed || endVal !== undefined) ? 0 : (162 - (team.stats.wins + team.stats.losses));
+                      const isClinched = sel.side === 'over' 
+                        ? wins > team.ou_line 
+                        : (wins + gamesRemaining) < team.ou_line;
+                      const isEliminated = sel.side === 'over'
+                        ? (wins + gamesRemaining) < team.ou_line
+                        : wins > team.ou_line;
+                      const neededRecord = (!isClinched && !isEliminated && gamesRemaining > 0)
+                        ? calculateNeededRecord(sel.side, team.ou_line, wins, team.stats.losses)
+                        : null;
+
                       return (
-                        <div key={sel.team_id} className="flex justify-between items-center p-4 rounded-xl border-2 border-slate-100 shadow-sm">
-                          <div>
-                            <div className="font-varsity text-slate-900 uppercase tracking-tight">{team.team_name}</div>
-                            <div className="text-[10px] text-slate-500 uppercase tracking-widest font-varsity">
-                              {activeContest.is_draft ? 'Draft Pick' : 'Selection'}
+                        <div key={sel.team_id} className={`p-4 rounded-xl border-2 shadow-sm transition-all ${
+                          isContestBigBet && isClinched 
+                            ? 'bg-emerald-50/50 border-emerald-300' 
+                            : isContestBigBet && isEliminated 
+                              ? 'bg-rose-50/20 border-slate-200 opacity-75' 
+                              : 'bg-slate-50 border-slate-100'
+                        }`}>
+                          <div className="flex justify-between items-center mb-3">
+                            <div>
+                              <div className="font-varsity text-slate-900 uppercase tracking-tight">{team.team_name}</div>
+                              <div className="text-[10px] text-slate-500 uppercase tracking-widest font-varsity flex flex-wrap items-center gap-y-1">
+                                <span>{sel.side} {team.ou_line} • {sel.chips} Chips</span>
+                                {isClinched && (
+                                  <span className="text-emerald-700 ml-2 font-black">
+                                    CLINCHED • +{sel.chips} CP AWARDED
+                                  </span>
+                                )}
+                                {isEliminated && <span className="text-rose-600 ml-2 font-black">ELIMINATED • 0 CP</span>}
+                                {!isClinched && !isEliminated && endVal === undefined && gamesPlayed > 0 && (
+                                  <span className={`ml-2 px-1.5 py-0.5 rounded ${isTrendingCorrect ? 'bg-emerald-500/10 text-emerald-600' : 'bg-rose-500/10 text-rose-600'} font-black text-[7px]`}>
+                                    PACE: {projectedWins} ({projectedWins > team.ou_line ? 'O' : 'U'})
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-varsity text-blue-600 uppercase tracking-tight">{metricValue} {formatMetric(activeContest.metric_key)}</div>
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    const endVal = activeContest.ending_stats?.[team.id];
-                    const wins = endVal !== undefined ? endVal : team.stats.wins;
-                    const gamesPlayed = team.stats.wins + team.stats.losses;
-                    const projectedWins = gamesPlayed > 0 ? Math.round((wins / gamesPlayed) * 162) : 0;
-                    const isTrendingCorrect = sel.side === 'over' ? projectedWins > team.ou_line : projectedWins < team.ou_line;
-
-                    const gamesRemaining = (activeContest.results_sealed || endVal !== undefined) ? 0 : (162 - (team.stats.wins + team.stats.losses));
-                    const isClinched = sel.side === 'over' 
-                      ? wins > team.ou_line 
-                      : (wins + gamesRemaining) < team.ou_line;
-                    const isEliminated = sel.side === 'over'
-                      ? (wins + gamesRemaining) < team.ou_line
-                      : wins > team.ou_line;
-                    const neededRecord = (!isClinched && !isEliminated && gamesRemaining > 0)
-                      ? calculateNeededRecord(sel.side, team.ou_line, wins, team.stats.losses)
-                      : null;
-
-                    return (
-                      <div key={sel.team_id} className={`p-4 rounded-xl border-2 shadow-sm transition-all ${
-                        isBigBet && isClinched 
-                          ? 'bg-emerald-50/50 border-emerald-300' 
-                          : isBigBet && isEliminated 
-                            ? 'bg-rose-50/20 border-slate-200 opacity-75' 
-                            : 'bg-slate-50 border-slate-100'
-                      }`}>
-                        <div className="flex justify-between items-center mb-3">
-                          <div>
-                            <div className="font-varsity text-slate-900 uppercase tracking-tight">{team.team_name}</div>
-                            <div className="text-[10px] text-slate-500 uppercase tracking-widest font-varsity flex flex-wrap items-center gap-y-1">
-                              <span>{sel.side} {team.ou_line} • {sel.chips} Chips</span>
-                              {isClinched && (
-                                <span className="text-emerald-700 ml-2 font-black">
-                                  CLINCHED • +{sel.chips} CP AWARDED
-                                </span>
-                              )}
-                              {isEliminated && <span className="text-rose-600 ml-2 font-black">ELIMINATED • 0 CP</span>}
-                              {!isClinched && !isEliminated && endVal === undefined && gamesPlayed > 0 && (
-                                <span className={`ml-2 px-1.5 py-0.5 rounded ${isTrendingCorrect ? 'bg-emerald-500/10 text-emerald-600' : 'bg-rose-500/10 text-rose-600'} font-black text-[7px]`}>
-                                  PACE: {projectedWins} ({projectedWins > team.ou_line ? 'O' : 'U'})
-                                </span>
+                            <div className="text-right">
+                              {isContestBigBet && isClinched ? (
+                                <div>
+                                  <div className="font-varsity uppercase tracking-tight tabular-nums text-emerald-600 font-black text-lg">
+                                    +{sel.chips} CP
+                                  </div>
+                                  <div className="text-[8px] text-emerald-700 uppercase tracking-widest font-varsity font-black">AWARDED</div>
+                                </div>
+                              ) : (
+                                <div>
+                                  <div className={`font-varsity uppercase tracking-tight tabular-nums ${isClinched ? 'text-emerald-600' : isEliminated ? 'text-rose-600' : 'text-slate-400'}`}>
+                                    {wins}{endVal === undefined && ` - ${team.stats.losses}`}
+                                  </div>
+                                  <div className="text-[8px] text-slate-500 uppercase tracking-widest font-varsity">{endVal !== undefined ? 'Final' : 'Current'}</div>
+                                </div>
                               )}
                             </div>
                           </div>
-                          <div className="text-right">
-                            {isBigBet && isClinched ? (
-                              <div>
-                                <div className="font-varsity uppercase tracking-tight tabular-nums text-emerald-600 font-black text-lg">
-                                  +{sel.chips} CP
-                                </div>
-                                <div className="text-[8px] text-emerald-700 uppercase tracking-widest font-varsity font-black">AWARDED</div>
-                              </div>
-                            ) : (
-                              <div>
-                                <div className={`font-varsity uppercase tracking-tight tabular-nums ${isClinched ? 'text-emerald-600' : isEliminated ? 'text-rose-600' : 'text-slate-400'}`}>
-                                  {wins}{endVal === undefined && ` - ${team.stats.losses}`}
-                                </div>
-                                <div className="text-[8px] text-slate-500 uppercase tracking-widest font-varsity">{endVal !== undefined ? 'Final' : 'Current'}</div>
-                              </div>
-                            )}
+                          <div className="relative h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                            <div 
+                              className={`absolute top-0 left-0 h-full transition-all duration-1000 ${isClinched ? 'bg-emerald-500' : isEliminated ? 'bg-rose-500' : 'bg-slate-400'}`}
+                              style={{ width: `${Math.min((wins / team.ou_line) * 100, 100)}%` }}
+                            />
                           </div>
-                        </div>
-                        <div className="relative h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                          <div 
-                            className={`absolute top-0 left-0 h-full transition-all duration-1000 ${isClinched ? 'bg-emerald-500' : isEliminated ? 'bg-rose-500' : 'bg-slate-400'}`}
-                            style={{ width: `${Math.min((wins / team.ou_line) * 100, 100)}%` }}
-                          />
-                        </div>
 
-                        {/* Required record to win bet */}
-                        {neededRecord && (
-                          <div className="mt-2.5 px-3 py-2 rounded-lg bg-blue-50/90 border border-blue-200 flex flex-wrap items-center justify-between gap-1.5 text-xs font-varsity">
-                            <div className="flex items-center gap-1.5 text-slate-800">
-                              <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0 animate-pulse" />
-                              <span>
-                                Needs to go <span className="font-mono text-blue-700 font-black bg-white px-1.5 py-0.5 rounded border border-blue-300 shadow-2xs">{neededRecord.conditionText}</span> in remaining {neededRecord.remainingGames} {neededRecord.remainingGames === 1 ? 'game' : 'games'} to win bet
+                          {/* Required record to win bet */}
+                          {neededRecord && (
+                            <div className="mt-2.5 px-3 py-2 rounded-lg bg-blue-50/90 border border-blue-200 flex flex-wrap items-center justify-between gap-1.5 text-xs font-varsity">
+                              <div className="flex items-center gap-1.5 text-slate-800">
+                                <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0 animate-pulse" />
+                                <span>
+                                  Needs to go <span className="font-mono text-blue-700 font-black bg-white px-1.5 py-0.5 rounded border border-blue-300 shadow-2xs">{neededRecord.conditionText}</span> in remaining {neededRecord.remainingGames} {neededRecord.remainingGames === 1 ? 'game' : 'games'} to win bet
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-blue-700 uppercase tracking-wider font-mono font-bold bg-blue-100/70 px-1.5 py-0.5 rounded">
+                                Target: {sel.side === 'over' ? `≥${neededRecord.targetWins} wins` : `≤${neededRecord.targetWins} wins`}
                               </span>
                             </div>
-                            <span className="text-[10px] text-blue-700 uppercase tracking-wider font-mono font-bold bg-blue-100/70 px-1.5 py-0.5 rounded">
-                              Target: {sel.side === 'over' ? `≥${neededRecord.targetWins} wins` : `≤${neededRecord.targetWins} wins`}
-                            </span>
-                          </div>
-                        )}
-                        {isBigBet && isClinched && (
-                          <div className="mt-2.5 px-3 py-1.5 rounded-lg bg-emerald-100/70 border border-emerald-300 flex items-center justify-between gap-1.5 text-xs font-varsity text-emerald-900">
-                            <div className="flex items-center gap-1.5 font-bold">
-                              <Trophy size={12} className="text-emerald-700 shrink-0" />
-                              <span>Bet Clinched! Hit {sel.side.toUpperCase()} {team.ou_line}</span>
+                          )}
+                          {isContestBigBet && isClinched && (
+                            <div className="mt-2.5 px-3 py-1.5 rounded-lg bg-emerald-100/70 border border-emerald-300 flex items-center justify-between gap-1.5 text-xs font-varsity text-emerald-900">
+                              <div className="flex items-center gap-1.5 font-bold">
+                                <Trophy size={12} className="text-emerald-700 shrink-0" />
+                                <span>Bet Clinched! Hit {sel.side.toUpperCase()} {team.ou_line}</span>
+                              </div>
+                              <span className="text-[10px] font-mono font-black text-emerald-800 uppercase tracking-wider bg-emerald-200/80 px-1.5 py-0.5 rounded">
+                                +{sel.chips} CP Awarded
+                              </span>
                             </div>
-                            <span className="text-[10px] font-mono font-black text-emerald-800 uppercase tracking-wider bg-emerald-200/80 px-1.5 py-0.5 rounded">
-                              +{sel.chips} CP Awarded
-                            </span>
-                          </div>
-                        )}
-                        {isBigBet && isEliminated && (
-                          <div className="mt-2.5 px-3 py-1.5 rounded-lg bg-rose-50 border border-rose-200 flex items-center justify-between gap-1.5 text-xs font-varsity text-rose-800">
-                            <div className="flex items-center gap-1.5 font-bold">
-                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
-                              <span>Eliminated — Cannot reach {sel.side.toUpperCase()} {team.ou_line}</span>
+                          )}
+                          {isContestBigBet && isEliminated && (
+                            <div className="mt-2.5 px-3 py-1.5 rounded-lg bg-rose-50 border border-rose-200 flex items-center justify-between gap-1.5 text-xs font-varsity text-rose-800">
+                              <div className="flex items-center gap-1.5 font-bold">
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                                <span>Eliminated — Cannot reach {sel.side.toUpperCase()} {team.ou_line}</span>
+                              </div>
+                              <span className="text-[10px] font-mono font-bold text-rose-600 uppercase tracking-wider bg-rose-100/60 px-1.5 py-0.5 rounded">
+                                0 CP
+                              </span>
                             </div>
-                            <span className="text-[10px] font-mono font-bold text-rose-600 uppercase tracking-wider bg-rose-100/60 px-1.5 py-0.5 rounded">
-                              0 CP
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                          )}
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </motion.div>
             </div>
